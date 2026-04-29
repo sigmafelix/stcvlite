@@ -1,14 +1,25 @@
 Package: stcvlite
 Title: Lightweight rsample extension for spatiotemporal cross-validation
-Version: 0.0.0.9000
+Version: 0.1.0.9000
 Authors@R: 
     person("Insang", "Song", , "geoissong@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-8732-3256"))
 Description: The main functions provide rset generators for spatiotemporal cross-validation with low footprint. 
 License: MIT
+Imports:
+  rsample,
+  data.table,
+  FNN,
+  N2R,
+  methods
+Suggests:
+  testthat (>= 3.0.0),
+  terra,
+  sf,
+  sftime
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.3
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

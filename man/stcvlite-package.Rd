@@ -6,6 +6,8 @@
 \alias{stcvlite-package}
 \title{stcvlite: Lightweight rsample extension for spatiotemporal cross-validation}
 \description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
 The main functions provide rset generators for spatiotemporal cross-validation with low footprint.
 }
 \author{

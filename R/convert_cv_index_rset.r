@@ -2,7 +2,7 @@
 
 #' Generate manual rset object from spatiotemporal cross-validation indices
 #' @param cvindex integer. Output of [`generate_cv_index`].
-#' @param data data.frame from [stdt][`convert_stobj_to_stdt`]. Should be the
+#' @param data data.frame from `stdt`. Should be the
 #' same object as what was used for `covars` argument of [`generate_cv_index`]
 #' @param cv_mode character(1). Spatiotemporal cross-validation indexing method.
 #' See `cv_mode` description in [`generate_cv_index`].
