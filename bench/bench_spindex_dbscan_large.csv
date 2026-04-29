@@ -1,0 +1,5 @@
+"n","engine","min","median","mem_alloc","n_itr"
+10000,"dbscan", 70.32ms, 70.56ms,  7.61MB,3
+50000,"dbscan",398.55ms,399.56ms, 38.74MB,3
+100000,"dbscan",  1.23s,  1.23s, 87.97MB,2
+150000,"dbscan",  1.9s,  1.9s,137.94MB,1
