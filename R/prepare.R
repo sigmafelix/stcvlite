@@ -1,60 +1,127 @@
 # data preparation for generate_index
 
 #' Convert sf and sftime objects to stdt format
-#' @param stobj An sf, sftime, SpatVector or SpatRasterDataset object
-#' @return A stdt object
+#' @param input An sf, sftime, SpatVector or SpatRasterDataset object
+#' @return A data.table object with `lon`, `lat`, `time` and a `crs` attribute
 #' @export
-convert_stobj_to_stdt <- function(stobj) {
-  geometry <- NULL
-  format <- class(stobj)[[1]]
-  if (format == "sf" || format == "sftime") {
-    if (any(!(c("geometry", "time") %in% colnames(stobj)))) {
-      stop("stobj does not contain geometry and time columns")
+prep_input <- function(input) {
+  detect_time_col <- function(nms) {
+    nms_low <- tolower(nms)
+    preferred <- c("time", "datetime", "date", "timestamp", "ts")
+    matched <- nms[nms_low %in% preferred]
+
+    if (length(matched) == 0L) {
+      stop("input does not contain a temporal column")
     }
-    crs_dt <- as.character(sf::st_crs(stobj))[1]
-    stobj$lon <- sf::st_coordinates(stobj)[, 1]
-    stobj$lat <- sf::st_coordinates(stobj)[, 2]
-    stdt <- data.table::as.data.table(stobj)
-    stdt <- stdt[, geometry := NULL]
-  } else if (format == "SpatVector") {
-    if (!("time") %in% names(stobj)) {
-      stop("stobj does not contain time column")
-    }
-    crs_dt <- terra::crs(stobj)
-    stdf <- as.data.frame(stobj, geom = "XY")
-    names(stdf)[names(stdf) == "x"] <- "lon"
-    names(stdf)[names(stdf) == "y"] <- "lat"
-    stdt <- data.table::as.data.table(stdf)
-  } else if (format == "SpatRasterDataset") {
-    crs_dt <- terra::crs(stobj)
-    stdf <- as.data.frame(stobj[1], xy = TRUE)
-    colnames(stdf)[1] <- "lon"
-    colnames(stdf)[2] <- "lat"
-    # -- tranform from wide to long format
-    stdf <- stdf %>% tidyr::pivot_longer(
-      cols = 3:ncol(stdf),
-      names_to = "time",
-      values_to = names(stobj)[1]
-    )
-    for (var in names(stobj)[2:length(names(stobj))]) {
-      # test that the ts is identical to the ts of the 1st variable
-      if (!(identical(names(stobj[var]), names(stobj[1])))) {
-        stop("Error in SpatRastDataset: timeserie is different for at least
-             2 variables - or not ordered for one of these.")
+
+    matched_low <- tolower(matched)
+    for (cand in preferred) {
+      idx <- which(matched_low == cand)
+      if (length(idx) > 0L) {
+        return(matched[[idx[1]]])
       }
-      df_var <- as.data.frame(stobj[var], xy = TRUE)
-      # -- tranform from wide to long format
-      df_var <- df_var %>% tidyr::pivot_longer(
-        cols = 3:ncol(df_var),
-        names_to = "time",
-        values_to = var
-      )
-      stdf[, var] <- df_var[, var]
     }
-    stdt <- data.table::as.data.table(stdf)
+
+    return(matched[[1]])
+  }
+
+  melt_raster_var <- function(rast, value_name) {
+    df <- as.data.frame(rast, xy = TRUE)
+    dt <- data.table::as.data.table(df)
+    data.table::setnames(dt, old = names(dt)[1:2], new = c("lon", "lat"))
+    measure_cols <- names(dt)[3:ncol(dt)]
+
+    if (length(measure_cols) == 0L) {
+      stop("input SpatRasterDataset does not contain temporal layers")
+    }
+
+    dt_long <- data.table::melt(
+      dt,
+      id.vars = c("lon", "lat"),
+      measure.vars = measure_cols,
+      variable.name = ".time_src",
+      value.name = value_name,
+      variable.factor = FALSE
+    )
+
+    ts_vec <- terra::time(rast)
+    if (!is.null(ts_vec) && length(ts_vec) == length(measure_cols)) {
+      time_map <- data.table::data.table(
+        .time_src = measure_cols,
+        time = as.character(ts_vec)
+      )
+    } else {
+      time_map <- data.table::data.table(
+        .time_src = measure_cols,
+        time = measure_cols
+      )
+    }
+
+    dt_long <- data.table::merge.data.table(
+      dt_long,
+      time_map,
+      by = ".time_src",
+      all.x = TRUE,
+      sort = FALSE
+    )
+
+    dt_long[[".time_src"]] <- NULL
+    return(dt_long)
+  }
+
+  if (inherits(input, "sf") || inherits(input, "sftime")) {
+    crs_dt <- as.character(sf::st_crs(input))[1]
+    stdt <- data.table::as.data.table(sf::st_drop_geometry(input))
+    time_col <- detect_time_col(names(stdt))
+
+    rep_points <- sf::st_point_on_surface(sf::st_geometry(input))
+    coords <- sf::st_coordinates(rep_points)
+    if (nrow(coords) != nrow(stdt)) {
+      coords <- sf::st_coordinates(sf::st_centroid(sf::st_geometry(input)))
+    }
+
+    stdt[["lon"]] <- coords[, 1]
+    stdt[["lat"]] <- coords[, 2]
+    data.table::setnames(stdt, old = time_col, new = "time")
+  } else if (inherits(input, "SpatVector")) {
+    crs_dt <- terra::crs(input)
+    stdt <- data.table::as.data.table(as.data.frame(input, geom = FALSE))
+    time_col <- detect_time_col(names(stdt))
+
+    rep_points <- terra::centroids(input)
+    coords <- as.data.frame(rep_points, geom = "XY")
+    stdt[["lon"]] <- coords$x
+    stdt[["lat"]] <- coords$y
+    data.table::setnames(stdt, old = time_col, new = "time")
+  } else if (inherits(input, "SpatRasterDataset")) {
+    crs_dt <- terra::crs(input)
+    vars <- names(input)
+
+    if (length(vars) == 0L) {
+      stop("input SpatRasterDataset has no variables")
+    }
+
+    stdt <- melt_raster_var(input[1], vars[1])
+    if (length(vars) > 1L) {
+      for (var in vars[2:length(vars)]) {
+        dt_var <- melt_raster_var(input[var], var)
+        stdt <- data.table::merge.data.table(
+          stdt,
+          dt_var,
+          by = c("lon", "lat", "time"),
+          all = TRUE,
+          sort = FALSE
+        )
+      }
+    }
   } else {
     stop("stobj class not accepted")
   }
-  stdtobj <- create_stdtobj(stdt, crs_dt)
-  return(stdtobj)
+
+  data.table::setcolorder(
+    stdt,
+    c("lon", "lat", "time", setdiff(names(stdt), c("lon", "lat", "time")))
+  )
+  attr(stdt, "crs") <- crs_dt
+  return(stdt)
 }

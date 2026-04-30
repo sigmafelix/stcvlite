@@ -7,7 +7,7 @@
 generate_cv_index_lolto(covars)
 }
 \arguments{
-\item{covars}{stdt. See \code{\link{convert_stobj_to_stdt}} for details.}
+\item{covars}{stdt. See \code{\link[=prep_input]{prep_input()}} for details.}
 }
 \value{
 An integer vector.

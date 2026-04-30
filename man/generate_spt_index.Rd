@@ -7,7 +7,7 @@
 generate_spt_index(covars, mode = c("spatial", "spatiotemporal"))
 }
 \arguments{
-\item{covars}{stdt. See \link{convert_stobj_to_stdt}}
+\item{covars}{stdt. See \code{\link[=prep_input]{prep_input()}}}
 
 \item{mode}{One of \code{"spatial"} or \code{"spatiotemporal"}}
 }

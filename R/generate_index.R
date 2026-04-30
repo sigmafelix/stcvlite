@@ -43,7 +43,7 @@ generate_cv_index <- function(
   # type check
   if (!any("stdt" %in% class(covars))) {
     stop("Only stdt object is acceptable. Please consider
-    using convert_stobj_to_stdt.\n")
+    using prep_input.")
   }
   cv_mode <- match.arg(cv_mode)
   # no block check
@@ -79,7 +79,7 @@ generate_cv_index <- function(
 
 
 #' Generate unique spatiotemporal identifier from stdt object
-#' @param covars stdt. See [convert_stobj_to_stdt]
+#' @param covars stdt. See [prep_input()]
 #' @param mode One of `"spatial"` or `"spatiotemporal"`
 #' @description It generates unique spatiotemporal identifier in the
 #' input stdt object. Regardless of mode values
@@ -214,7 +214,7 @@ generate_block_sp_index <- function(
 }
 
 #' Generate spatio-temporal cross-validation index (leave-one-time-out)
-#' @param covars stdt. See \code{\link{convert_stobj_to_stdt}} for details.
+#' @param covars stdt. See [prep_input()] for details.
 #' @author Insang Song
 #' @return An integer vector.
 #' @export
@@ -228,7 +228,7 @@ generate_cv_index_loto <-
   }
 
 #' Generate spatio-temporal cross-validation index (leave-one-location-out)
-#' @param covars stdt. See \code{\link{convert_stobj_to_stdt}} for details.
+#' @param covars stdt. See [prep_input()] for details.
 #' @author Insang Song
 #' @return An integer vector.
 #' @export
@@ -244,7 +244,7 @@ generate_cv_index_lolo <-
 
 
 #' Generate spatio-temporal cross-validation index leave-one-location-time-out)
-#' @param covars stdt. See \code{\link{convert_stobj_to_stdt}} for details.
+#' @param covars stdt. See [prep_input()] for details.
 #' @author Insang Song
 #' @return An integer vector.
 #' @export
@@ -258,7 +258,7 @@ generate_cv_index_lolto <-
 
 # nolint start
 #' Generate spatio-temporal cross-validation index (leave-block-location-out)
-#' @param covars stdt. See \code{\link{convert_stobj_to_stdt}} for details.
+#' @param covars stdt. See [prep_input()] for details.
 #' @param cv_fold integer(1). Number of folds for cross-validation.
 #' @param blocks integer(2)/sf/SpatVector object.
 #' @param block_id character(1). The unique identifier of each block.
@@ -294,7 +294,7 @@ generate_cv_index_lblo <-
 
 # nolint start
 #' Generate spatio-temporal cross-validation index (leave-block-time-out)
-#' @param covars stdt. See \code{\link{convert_stobj_to_stdt}} for details.
+#' @param covars stdt. See [prep_input()] for details.
 #' @param cv_fold integer(1). Number of folds for cross-validation.
 #' @author Insang Song
 #' @return An integer vector.
@@ -334,7 +334,7 @@ generate_cv_index_lbto <- function(
 
 # nolint start
 #' Generate spatio-temporal cross-validation index (leave-block-location-time-out)
-#' @param covars stdt. See \code{\link{convert_stobj_to_stdt}} for details.
+#' @param covars stdt. See \code{\link{prep_input}} for details.
 #' @param sp_fold integer(1). Number of subfolds for spatial blocks.
 #' @param t_fold integer(1). Number of subfolds for temporal blocks.
 #' @param blocks integer(2)/sf/SpatVector object.
