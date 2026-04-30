@@ -1,3 +1,7 @@
-# stcvlite (development version)
+# 0.2
+- Added multiple backend engines for spatial blocking
+- Added plot function
+- Added preparation function
 
-* Initial CRAN submission.
+# 0.1
+- Subset the indexing functions from amadeus

@@ -29,7 +29,7 @@ at most \code{max_points} for display.
 \examples{
 data(spdat)
 cv_index <-
-  generate_cv_index(spdat, cv_mode = "lolo")
+  generate_cv_index(spdat, cv_mode = "lblo", cv_fold = 6)
 
 if (requireNamespace("plotly", quietly = TRUE)) {
   p <- plot_cv_folds_25d(spdat, cv_index)

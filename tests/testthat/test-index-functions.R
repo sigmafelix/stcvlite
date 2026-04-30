@@ -14,8 +14,6 @@ testthat::test_that("generate_block_sp_index supports kmeans and numeric blocks"
 
   out_km <- stcvlite::generate_block_sp_index(covars, cv_fold = 2)
   testthat::expect_true("sp_index" %in% names(out_km$stdt))
-  testthat::expect_true(!is.null(attr(out_km, "kmeans_centers")))
-  testthat::expect_true(!is.null(attr(out_km, "kmeans_sizes")))
 
   out_grid <- stcvlite::generate_block_sp_index(covars, blocks = c(1, 1))
   testthat::expect_true("sp_index" %in% names(out_grid$stdt))
@@ -36,8 +34,44 @@ testthat::test_that("index generators return expected fold structures", {
   testthat::expect_equal(length(unique(idx_lolo)), 3)
   testthat::expect_equal(idx_lolto, seq_len(nrow(covars$stdt)))
   testthat::expect_equal(length(idx_lblo), nrow(covars$stdt))
+  testthat::expect_true(all(idx_lblo >= 1 & idx_lblo <= 2))
   testthat::expect_true(all(idx_lbto >= 1 & idx_lbto <= 2))
   testthat::expect_true(all(idx_lblto >= 1))
+})
+
+testthat::test_that("lblo cases are consistent across generate_cv_index* functions", {
+  covars <- make_covars_fixture()
+
+  set.seed(123)
+  idx_lblo_direct <- stcvlite::generate_cv_index_lblo(covars, cv_fold = 2)
+  set.seed(123)
+  idx_lblo_dispatch <- stcvlite::generate_cv_index(covars, cv_mode = "lblo", cv_fold = 2)
+
+  testthat::expect_equal(idx_lblo_dispatch, idx_lblo_direct)
+
+  idx_lblo_blocks_direct <- stcvlite::generate_cv_index_lblo(
+    covars,
+    cv_fold = NULL,
+    blocks = c(1, 1)
+  )
+  idx_lblo_blocks_dispatch <- stcvlite::generate_cv_index(
+    covars,
+    cv_mode = "lblo",
+    cv_fold = 2,
+    blocks = c(1, 1)
+  )
+
+  testthat::expect_equal(idx_lblo_blocks_dispatch, idx_lblo_blocks_direct)
+  testthat::expect_equal(length(idx_lblo_blocks_direct), nrow(covars$stdt))
+
+  testthat::expect_error(
+    stcvlite::generate_cv_index_lblo(covars, cv_fold = NULL),
+    "cannot be NULL"
+  )
+  testthat::expect_error(
+    stcvlite::generate_cv_index(covars, cv_mode = "lblo", cv_fold = NULL),
+    "invalid"
+  )
 })
 
 testthat::test_that("generate_cv_index dispatches correctly for all available modes", {

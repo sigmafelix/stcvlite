@@ -28,6 +28,14 @@ the index column will be named "sp_index". \code{block_id} should be set with a 
 when blocks is a sf or SpatVector object. When \code{cv_fold} is an integer, then the coordinates stored in \code{stdt} object are clustered with k-means. In this case, the result object will include attributes (accessible with \code{attr} function) about
 "kmeans_centers" (coordinates of centers) and "kmeans_sizes" (size of each cluster)
 }
+\examples{
+data(spdat)
+covars <- spdat
+covars_block <- generate_block_sp_index(covars, cv_fold = 5)
+covars_block$stdt
+
+plot_cv_folds_25d(covars_block$stdt, covars_block$stdt$sp_index)
+}
 \author{
 Insang Song
 }

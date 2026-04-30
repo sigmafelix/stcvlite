@@ -125,3 +125,30 @@ prep_input <- function(input) {
   attr(stdt, "crs") <- crs_dt
   return(stdt)
 }
+
+
+from_stdt <- function(input, to = "sf") {
+  match.arg(to, choices = c("sf", "sftime", "SpatVector"))
+
+  if (to == "sf") {
+    sf::st_as_sf(
+      input,
+      coords = c("lon", "lat"),
+      crs = attr(input, "crs"),
+      remove = FALSE
+    )
+  } else if (to == "sftime") {
+    sf::st_as_sf(
+      input,
+      coords = c("lon", "lat"),
+      crs = attr(input, "crs"),
+      remove = FALSE
+    )
+  } else if (to == "SpatVector") {
+    terra::vect(
+      input,
+      geom = c("lon", "lat"),
+      crs = attr(input, "crs")
+    )
+  }
+}

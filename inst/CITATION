@@ -1,11 +1,7 @@
 bibentry(
-  bibtype  = "Article",
-  title    = ,
-  author   = ,
-  journal  = ,
-  year     = ,
-  volume   = ,
-  number   = ,
-  pages    = ,
-  doi      =
+  bibtype  = "Manual",
+  title    = "A lightweight spatiotemporal cross-validation indexing",
+  author   = "Insang Song",
+  year     = 2026,
+  url      = "https://github.com/sigmafelix/stcvlite"
 )

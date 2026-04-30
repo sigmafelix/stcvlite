@@ -1,93 +1,25 @@
 .assign_spindex <-
   function(
     data,
-    sp_cols = c("x", "y"),
+    sp_cols = c("lon", "lat"),
     nclusters = 5L,
-    engine = c("dbscan", "FNN", "N2R"),
+    engine = c("dbscan", "FNN"),
     ...
   ) {
     stopifnot(inherits(data, "data.frame"))
-
-    spmat <- as.matrix(data[, sp_cols])
-    if (any(!is.finite(spmat))) {
-      stop("Spatial columns must contain only finite values.")
-    }
+    # spmat <- as.matrix(sp_subset)
+    # if (any(!is.finite(spmat))) {
+    #   stop("Spatial columns must contain only finite values.")
+    # }
 
     worker <- switch(engine,
       dbscan = .assign_spindex_dbscan,
       FNN = .assign_spindex_FNN,
-      N2R = .assign_spindex_N2R,
-      stop("Invalid engine. Choose one of 'fastCluster', 'FNN', or 'N2R'.")
+      stop("Invalid engine. Choose one of 'dbscan', 'FNN'.")
     )
     worker(data, sp_cols, nclusters, ...)
   }
 
-.assign_spindex_N2R <-
-  function(
-    data,
-    sp_cols,
-    nclusters,
-    k = 10L
-  ) {
-    x <- as.matrix(data[, sp_cols, drop = FALSE])
-    storage.mode(x) <- "double"
-
-    knn_result <- N2R::Knn(x, x, k = k + 1L, include_self = TRUE)
-    knn_index <- knn_result$nn.idx[, -1L, drop = FALSE]
-
-    adj <- matrix(0L, nrow = nrow(x), ncol = nrow(x))
-    for (i in seq_len(nrow(knn_index))) {
-      adj[i, knn_index[i, ]] <- 1L
-    }
-    adj <- adj + t(adj)
-    adj[adj > 0L] <- 1L
-
-    cl <- integer(nrow(x))
-    current_cluster <- 0L
-    unvisited <- seq_len(nrow(x))
-
-    while (length(unvisited) > 0L) {
-      seed <- unvisited[1]
-      current_cluster <- current_cluster + 1L
-      queue <- seed
-      cl[seed] <- current_cluster
-      unvisited <- setdiff(unvisited, seed)
-
-      while (length(queue) > 0L) {
-        node <- queue[1]
-        queue <- queue[-1]
-        neighbors <- which(adj[node, ] > 0L)
-        new_nodes <- intersect(neighbors, unvisited)
-        cl[new_nodes] <- current_cluster
-        unvisited <- setdiff(unvisited, new_nodes)
-        queue <- c(queue, new_nodes)
-      }
-    }
-
-    if (current_cluster != nclusters) {
-      sizes <- tabulate(cl, nbins = current_cluster)
-      top_clusters <-
-        order(sizes, decreasing = TRUE)[
-          seq_len(min(nclusters, current_cluster))
-        ]
-      remap <- integer(current_cluster)
-      remap[top_clusters] <- seq_along(top_clusters)
-      cl_new <- remap[cl]
-      noise <- cl_new == 0L
-      if (any(noise) && any(!noise)) {
-        nn <- FNN::get.knnx(
-          data = x[!noise, , drop = FALSE],
-          query = x[noise, , drop = FALSE],
-          k = 1L
-        )
-        cl_new[noise] <- cl_new[!noise][nn$nn.index[, 1]]
-      }
-      cl <- cl_new
-    }
-
-    data$.spindex <- as.integer(cl)
-    data
-  }
 
 .assign_spindex_FNN <-
   function(
@@ -96,7 +28,13 @@
     nclusters,
     k = 10L
   ) {
-    x <- as.matrix(data[, sp_cols, drop = FALSE])
+    sp_subset <-
+      if (data.table::is.data.table(data)) {
+        as.data.frame(data)[, sp_cols, drop = TRUE]
+      } else {
+        data[, sp_cols, drop = FALSE]
+      }
+    x <- as.matrix(sp_subset)
     storage.mode(x) <- "double"
 
     knn_index <- FNN::knn.index(x, k = k)
@@ -151,7 +89,7 @@
       cl <- cl_new
     }
 
-    data$.spindex <- as.integer(cl)
+    data$sp_index <- as.integer(cl)
     data
   }
 
@@ -171,7 +109,13 @@
     stopifnot(length(sp_cols) >= 2L)
     stopifnot(is.numeric(nclusters), length(nclusters) == 1L, nclusters >= 1L)
 
-    x <- as.matrix(data[, sp_cols, drop = FALSE])
+    sp_subset <-
+      if (data.table::is.data.table(data)) {
+        as.data.frame(data)[, sp_cols, drop = TRUE]
+      } else {
+        data[, sp_cols, drop = FALSE]
+      }
+    x <- as.matrix(sp_subset)
     storage.mode(x) <- "double"
 
     if (is.null(minPts)) {
@@ -277,7 +221,41 @@
       cl[cl == 0L] <- cl[cl > 0L][nn$nn.index[, 1]]
     }
 
-    data$.spindex <- ifelse(cl == 0L, NA_integer_, as.integer(cl))
+    # Enforce a bounded number of cluster labels for CV folds.
+    # DBSCAN can legitimately return many dense components
+    # (e.g., repeated coordinates over time), so we normalize
+    # to the requested number of spatial clusters.
+    positive <- cl[cl > 0L]
+    n_pos <- length(unique(positive))
+    n_unique_points <- nrow(unique(x))
+    target_clusters <- min(as.integer(nclusters), n_unique_points)
+
+    if (n_pos == 0L) {
+      km <- stats::kmeans(x, centers = target_clusters, nstart = 10)
+      cl <- km$cluster
+    } else if (n_pos > target_clusters) {
+      sizes <- tabulate(cl, nbins = max(cl))
+      top_clusters <- order(sizes, decreasing = TRUE)[seq_len(target_clusters)]
+      remap <- integer(max(cl))
+      remap[top_clusters] <- seq_along(top_clusters)
+      cl_new <- remap[cl]
+      dropped <- cl_new == 0L
+
+      if (any(dropped) && any(!dropped)) {
+        nn <- FNN::get.knnx(
+          data = x[!dropped, , drop = FALSE],
+          query = x[dropped, , drop = FALSE],
+          k = 1L
+        )
+        cl_new[dropped] <- cl_new[!dropped][nn$nn.index[, 1]]
+      }
+      cl <- cl_new
+    } else if (n_pos < target_clusters) {
+      km <- stats::kmeans(x, centers = target_clusters, nstart = 10)
+      cl <- km$cluster
+    }
+
+    data$sp_index <- ifelse(cl == 0L, NA_integer_, as.integer(cl))
     attr(data, "dbscan_eps") <- best_eps
     attr(data, "dbscan_minPts") <- minPts
     data
@@ -295,11 +273,25 @@
     stopifnot(is.numeric(n_bins), length(n_bins) == 1L, n_bins >= 1L)
 
     time_values <- data[[time_col]]
-    if (!is.numeric(time_values) && !inherits(time_values, "Date") && !inherits(time_values, "POSIXct")) {
+    if (
+      !is.numeric(time_values) && !inherits(time_values, "Date") &&
+        !inherits(time_values, "POSIXct")
+    ) {
       stop("Time column must be numeric, Date, or POSIXct.")
     }
 
-    breaks <- seq(min(time_values, na.rm = TRUE), max(time_values, na.rm = TRUE), length.out = n_bins + 1)
-    data$.time_bin <- cut(time_values, breaks = breaks, include.lowest = TRUE, labels = FALSE)
+    breaks <-
+      seq(
+        min(time_values, na.rm = TRUE),
+        max(time_values, na.rm = TRUE),
+        length.out = n_bins + 1
+      )
+    data$.time_bin <-
+      cut(
+        time_values,
+        breaks = breaks,
+        include.lowest = TRUE,
+        labels = FALSE
+      )
     data
   }

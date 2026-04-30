@@ -15,8 +15,7 @@ generate_cv_index(
 )
 }
 \arguments{
-\item{covars}{stdt. See \code{\link{convert_stobj_to_stdt}}
-for details.}
+\item{covars}{stdt. See \code{\link[=prep_input]{prep_input()}} for details.}
 
 \item{cv_mode}{character(1). One of \code{"lolo"} (leave-one-location-out),
 \code{"loto"} (leave-one-time-out),
@@ -59,6 +58,18 @@ where users can consider common spatial hierarchies such as
 states, counties, hydrological unit code areas, etc.
 \code{lblto} mode will accept \code{sp_fold} and \code{t_fold}.
 The maximum of results in this case is \code{sp_fold * t_fold}.
+}
+\examples{
+data(spdat)
+
+lolo <- generate_cv_index(spdat, cv_mode = "lolo")
+loto <- generate_cv_index(spdat, cv_mode = "loto")
+lolto <- generate_cv_index(spdat, cv_mode = "lolto")
+lblo <- generate_cv_index(spdat, cv_mode = "lblo", cv_fold = 5)
+lbto <- generate_cv_index(spdat, cv_mode = "lbto", cv_fold = 5)
+lblto <- generate_cv_index(spdat, cv_mode = "lblto", sp_fold = 5, t_fold = 4)
+random <- generate_cv_index(spdat, cv_mode = "random", cv_fold = 5)
+plot_cv_folds_25d(spdat$stdt, lblto)
 }
 \author{
 Insang Song
