@@ -40,15 +40,46 @@ testthat::test_that("index generators return expected fold structures", {
   testthat::expect_true(all(idx_lblto >= 1))
 })
 
-testthat::test_that("generate_cv_index dispatches by mode and validates arguments", {
+testthat::test_that("generate_cv_index dispatches correctly for all available modes", {
   covars <- make_covars_fixture()
 
-  idx_random <- stcvlite::generate_cv_index(covars, cv_mode = "random", cv_fold = 3)
+  idx_lolo <- stcvlite::generate_cv_index(covars, cv_mode = "lolo")
   idx_loto <- stcvlite::generate_cv_index(covars, cv_mode = "loto")
+  idx_lolto <- stcvlite::generate_cv_index(covars, cv_mode = "lolto")
+  set.seed(777)
+  idx_lblo <- stcvlite::generate_cv_index(covars, cv_mode = "lblo", cv_fold = 2)
+  idx_lbto <- stcvlite::generate_cv_index(covars, cv_mode = "lbto", cv_fold = 2)
+  set.seed(888)
+  idx_lblto <- stcvlite::generate_cv_index(
+    covars,
+    cv_mode = "lblto",
+    sp_fold = 2,
+    t_fold = 2,
+    blocks = NULL
+  )
+  set.seed(99)
+  idx_random <- stcvlite::generate_cv_index(covars, cv_mode = "random", cv_fold = 3)
 
-  testthat::expect_equal(length(idx_random), nrow(covars$stdt))
-  testthat::expect_true(all(idx_random >= 1 & idx_random <= 3))
-  testthat::expect_equal(length(unique(idx_loto)), 2)
+  testthat::expect_equal(idx_lolo, stcvlite::generate_cv_index_lolo(covars))
+  testthat::expect_equal(idx_loto, stcvlite::generate_cv_index_loto(covars))
+  testthat::expect_equal(idx_lolto, stcvlite::generate_cv_index_lolto(covars))
+  set.seed(777)
+  testthat::expect_equal(idx_lblo, stcvlite::generate_cv_index_lblo(covars, cv_fold = 2))
+  testthat::expect_equal(idx_lbto, stcvlite::generate_cv_index_lbto(covars, cv_fold = 2))
+  set.seed(888)
+  testthat::expect_equal(
+    idx_lblto,
+    stcvlite::generate_cv_index_lblto(covars, sp_fold = 2, t_fold = 2, blocks = NULL)
+  )
+  set.seed(99)
+  testthat::expect_equal(
+    idx_random,
+    stcvlite::generate_cv_index_random(covars, cv_fold = 3)
+  )
+})
+
+testthat::test_that("generate_cv_index validates arguments", {
+  covars <- make_covars_fixture()
 
   testthat::expect_error(
     stcvlite::generate_cv_index(covars$stdt),

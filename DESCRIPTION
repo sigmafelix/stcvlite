@@ -1,6 +1,6 @@
 Package: stcvlite
 Title: Lightweight rsample extension for spatiotemporal cross-validation
-Version: 0.2.0.9000
+Version: 0.2.1.9000
 Authors@R: 
     person("Insang", "Song", , "geoissong@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-8732-3256"))
@@ -11,9 +11,11 @@ Imports:
   data.table,
   FNN,
   N2R,
+  dbscan,
   methods
 Suggests:
   testthat (>= 3.0.0),
+  plotly,
   terra,
   sf,
   sftime
@@ -21,3 +23,6 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Config/testthat/edition: 3
+Depends: 
+    R (>= 3.5)
+LazyData: true

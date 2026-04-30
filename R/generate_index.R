@@ -275,7 +275,7 @@ generate_cv_index_lblo <-
     if (is.null(cv_fold) && is.null(blocks)) {
       stop("Argument cv_fold cannot be NULL unless
       valid argument for blocks is entered.
-      Please set a proper number.\n")
+      Please set a proper number.")
     }
     covars_sp_index <- generate_block_sp_index(
       covars,
