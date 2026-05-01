@@ -1,4 +1,12 @@
-url: ~
+url: https://sigmafelix.github.io/stcvlite/
+
 template:
   bootstrap: 5
+  bootswatch: simplex
+  params:
+    mathjax: true
 
+navbar:
+  structure:
+    left:  [home, reference, articles]
+    right: [lang, search, github]
