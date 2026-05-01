@@ -3,6 +3,7 @@
 #' Convert sf and sftime objects to stdt format
 #' @param input An sf, sftime, SpatVector or SpatRasterDataset object
 #' @return A data.table object with `lon`, `lat`, `time` and a `crs` attribute
+#' @author Eva Marques, Insang Song
 #' @export
 prep_input <- function(input) {
   detect_time_col <- function(nms) {

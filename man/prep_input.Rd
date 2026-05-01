@@ -15,3 +15,6 @@ A data.table object with \code{lon}, \code{lat}, \code{time} and a \code{crs} at
 \description{
 Convert sf and sftime objects to stdt format
 }
+\author{
+Eva Marques, Insang Song
+}
