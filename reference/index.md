@@ -1,0 +1,38 @@
+# Package index
+
+## All functions
+
+- [`convert_cv_index_rset()`](https://sigmafelix.github.io/stcvlite/reference/convert_cv_index_rset.md)
+  : Generate manual rset object from spatiotemporal cross-validation
+  indices
+- [`generate_block_sp_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_block_sp_index.md)
+  : Generate blocked spatial index
+- [`generate_cv_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index.md)
+  : Generate spatio-temporal cross-validation index
+- [`generate_cv_index_lblo()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index_lblo.md)
+  : Generate spatio-temporal cross-validation index
+  (leave-block-location-out)
+- [`generate_cv_index_lblto()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index_lblto.md)
+  : Generate spatio-temporal cross-validation index
+  (leave-block-location-time-out)
+- [`generate_cv_index_lbto()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index_lbto.md)
+  : Generate spatio-temporal cross-validation index
+  (leave-block-time-out)
+- [`generate_cv_index_lolo()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index_lolo.md)
+  : Generate spatio-temporal cross-validation index
+  (leave-one-location-out)
+- [`generate_cv_index_lolto()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index_lolto.md)
+  : Generate spatio-temporal cross-validation index
+  leave-one-location-time-out)
+- [`generate_cv_index_loto()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index_loto.md)
+  : Generate spatio-temporal cross-validation index (leave-one-time-out)
+- [`generate_cv_index_random()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index_random.md)
+  : Generate spatio-temporal cross-validation index (random)
+- [`generate_spt_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_spt_index.md)
+  : Generate unique spatiotemporal identifier from stdt object
+- [`plot_cv_folds_25d()`](https://sigmafelix.github.io/stcvlite/reference/plot_cv_folds_25d.md)
+  : Plot generated CV folds in a 2.5D scatterplot
+- [`prep_input()`](https://sigmafelix.github.io/stcvlite/reference/prep_input.md)
+  : Convert sf and sftime objects to stdt format
+- [`spdat`](https://sigmafelix.github.io/stcvlite/reference/spdat.md) :
+  Sample full spatiotemporal point data
