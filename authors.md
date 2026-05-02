@@ -7,6 +7,9 @@
 
 ## Citation
 
+Source:
+[`inst/CITATION`](https://github.com/sigmafelix/stcvlite/blob/main/inst/CITATION)
+
 Song I (2026). *A lightweight spatiotemporal cross-validation indexing*.
 <https://github.com/sigmafelix/stcvlite>.
 
