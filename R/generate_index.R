@@ -218,7 +218,6 @@ generate_block_sp_index <- function(
 
 
 
-
 #' Generate spatio-temporal cross-validation index (leave-one-time-out)
 #' @param covars stdt. See [prep_input()] for details.
 #' @author Insang Song
@@ -263,6 +262,7 @@ generate_cv_index_lolto <-
     cv_index <- seq(1, rows)
     return(cv_index)
   }
+
 
 # nolint start
 #' Generate spatio-temporal cross-validation index (leave-block-location-out)
