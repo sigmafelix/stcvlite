@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">stcvlite</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.3.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.4.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -52,7 +52,249 @@
 </h1>
 </div>
 <p><!-- badges: start --> <a href="https://github.com/sigmafelix/stcvlite/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/sigmafelix/stcvlite/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <!-- badges: end --></p>
-<p>Lightweight extension of rsample for spatiotemporal cross-validation</p>
+<p>Lightweight extension of <code>rsample</code> for spatiotemporal cross-validation</p>
+<div class="section level2">
+<h2 id="what-does-this-package-do">What does this package do?<a class="anchor" aria-label="anchor" href="#what-does-this-package-do"></a>
+</h2>
+<p><code>stcvlite</code> provides convenient functions to make <code>rset</code> objects for spatiotemporal cross-validation. <code>rset</code> class is a major component of <code>rsample</code> package, which is a part of <code>tidymodels</code> ecosystem, to perform hyperparameter tuning and model evaluation for machine learning tasks.</p>
+</div>
+<div class="section level2">
+<h2 id="cross-validation-schemes">Cross-validation schemes<a class="anchor" aria-label="anchor" href="#cross-validation-schemes"></a>
+</h2>
+<p>The package offers several cross-validation schemes by <em>what to split along</em>, for example, leave-one-out or leave-block-out along space or time indices or by combination of both. The principle encapsulates the schemes as acronyms. To note, the terminology is from <a href="https://doi.org/10.1038/s41370-024-00712-8" class="external-link">Clark et al. (2024)</a>:</p>
+<table class="table">
+<colgroup>
+<col width="24%">
+<col width="24%">
+<col width="51%">
+</colgroup>
+<thead><tr>
+<th align="center">Family</th>
+<th align="center">Scheme</th>
+<th align="left">Description</th>
+</tr></thead>
+<tbody>
+<tr>
+<td align="center">LOO</td>
+<td align="center"><code>"lolo"</code></td>
+<td align="left">Leave-one-location-out. In space-time data, all time indices at each location are assigned to the same fold.</td>
+</tr>
+<tr>
+<td align="center">LOO</td>
+<td align="center"><code>"loto"</code></td>
+<td align="left">Leave-one-time-out. In space-time data, all locations at each time index are assigned to the same fold.</td>
+</tr>
+<tr>
+<td align="center">LOO</td>
+<td align="center"><code>"lolto"</code></td>
+<td align="left">Leave-one-location-time-out. Same as LOO</td>
+</tr>
+<tr>
+<td align="center">LBO</td>
+<td align="center"><code>"lblo"</code></td>
+<td align="left">Leave-block-location-out. Proximal locations are chunked.</td>
+</tr>
+<tr>
+<td align="center">LBO</td>
+<td align="center"><code>"lbto"</code></td>
+<td align="left">Leave-block-time-out. Closer time indices are chunked.</td>
+</tr>
+<tr>
+<td align="center">LBO</td>
+<td align="center"><code>"lblto"</code></td>
+<td align="left">Leave-block-location-time-out. Both locations and time indices are considered in chunking.</td>
+</tr>
+<tr>
+<td align="center">Random</td>
+<td align="center"><code>"random"</code></td>
+<td align="left">Random assignment. Same as plain random CV.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"sigmafelix/stcvlite"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
+</h2>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://sigmafelix.github.io/stcvlite/">stcvlite</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Load the built-in sample dataset (100 locations × 120 time steps)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span>   <span class="co"># an stdt object with lon, lat, time, x1, x2, y columns</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="spatial-block-creation">Spatial block creation<a class="anchor" aria-label="anchor" href="#spatial-block-creation"></a>
+</h2>
+<p>Spatial blocks group nearby locations together so that an entire block ends up in the same fold, preventing spatial autocorrelation from leaking between training and test sets. <code><a href="reference/generate_block_sp_index.html">generate_block_sp_index()</a></code> attaches a <code>sp_index</code> column to the <code>stdt</code> object and supports three block-definition strategies.</p>
+<div class="section level3">
+<h3 id="strategy-1--k-means-clusters-cv_fold">Strategy 1 — k-means clusters (<code>cv_fold</code>)<a class="anchor" aria-label="anchor" href="#strategy-1--k-means-clusters-cv_fold"></a>
+</h3>
+<p>When <code>cv_fold</code> is supplied, coordinates are clustered with k-means.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Create 5 spatial clusters based on (lon, lat)</span></span>
+<span><span class="va">spdat_block</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_block_sp_index.html">generate_block_sp_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_fold <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span><span class="va">spdat_block</span><span class="op">$</span><span class="va">stdt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt; lon and lat columns alongside integer cluster ids 1–5</span></span>
+<span></span>
+<span><span class="co"># Inspect cluster sizes and centres (stored as attributes)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">spdat_block</span><span class="op">$</span><span class="va">stdt</span>, <span class="st">"kmeans_centers"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">spdat_block</span><span class="op">$</span><span class="va">stdt</span>, <span class="st">"kmeans_sizes"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="strategy-2--regular-grid-blocks--cstep_lon-step_lat">Strategy 2 — regular grid (<code>blocks = c(step_lon, step_lat)</code>)<a class="anchor" aria-label="anchor" href="#strategy-2--regular-grid-blocks--cstep_lon-step_lat"></a>
+</h3>
+<p>Pass a length-2 numeric vector to cut the bounding box into rectangular cells.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># ~5° × 5° grid cells</span></span>
+<span><span class="va">spdat_grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_block_sp_index.html">generate_block_sp_index</a></span><span class="op">(</span><span class="va">spdat</span>, blocks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">spdat_grid</span><span class="op">$</span><span class="va">stdt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="strategy-3--arbitrary-polygon-blocks-blocks--sfspatvector">Strategy 3 — arbitrary polygon blocks (<code>blocks = sf/SpatVector</code>)<a class="anchor" aria-label="anchor" href="#strategy-3--arbitrary-polygon-blocks-blocks--sfspatvector"></a>
+</h3>
+<p>Provide an <code>sf</code> or <code>SpatVector</code> polygon layer whose features define the block boundaries (e.g. states, counties, hydrological units). The <code>block_id</code> argument names the column that uniquely identifies each feature.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Example: U.S. state polygons (replace with your own polygon layer)</span></span>
+<span><span class="va">state_polygons</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_read.html" class="external-link">read_sf</a></span><span class="op">(</span><span class="st">"path/to/states.gpkg"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">spdat_poly</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_block_sp_index.html">generate_block_sp_index</a></span><span class="op">(</span></span>
+<span>  <span class="va">spdat</span>,</span>
+<span>  blocks   <span class="op">=</span> <span class="va">state_polygons</span>,</span>
+<span>  block_id <span class="op">=</span> <span class="st">"STUSPS"</span>   <span class="co"># unique state abbreviation column</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">spdat_poly</span><span class="op">$</span><span class="va">stdt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level2">
+<h2 id="cross-validation-schemes-1">Cross-validation schemes<a class="anchor" aria-label="anchor" href="#cross-validation-schemes-1"></a>
+</h2>
+<p><code><a href="reference/generate_cv_index.html">generate_cv_index()</a></code> returns an integer (or factor) fold-assignment vector with one value per row of the input. Pass this vector together with your data to <code><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset()</a></code> to obtain a <code>tidymodels</code>-compatible <code>rset</code> object.</p>
+<div class="section level3">
+<h3 id="leave-one-location-out-lolo">Leave-one-location-out (lolo)<a class="anchor" aria-label="anchor" href="#leave-one-location-out-lolo"></a>
+</h3>
+<p>Each unique location forms one fold; all time steps at that location are held out together.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">cv_lolo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lolo"</span><span class="op">)</span></span>
+<span><span class="co"># cv_lolo is an integer vector of length nrow(spdat$stdt)</span></span>
+<span><span class="co"># unique values == number of unique locations (100)</span></span>
+<span></span>
+<span><span class="va">rset_lolo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lolo</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lolo"</span><span class="op">)</span></span>
+<span><span class="va">rset_lolo</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="leave-one-time-out-loto">Leave-one-time-out (loto)<a class="anchor" aria-label="anchor" href="#leave-one-time-out-loto"></a>
+</h3>
+<p>Each unique time step is one fold; all locations at that time step are held out.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv_loto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"loto"</span><span class="op">)</span></span>
+<span><span class="co"># unique values == number of unique time steps (120)</span></span>
+<span></span>
+<span><span class="va">rset_loto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_loto</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"loto"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="leave-one-location-time-out-lolto">Leave-one-location-time-out (lolto)<a class="anchor" aria-label="anchor" href="#leave-one-location-time-out-lolto"></a>
+</h3>
+<p>Every single row becomes its own fold (standard LOO). Suitable for small datasets.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv_lolto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lolto"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="leave-block-location-out-lblo">Leave-block-location-out (lblo)<a class="anchor" aria-label="anchor" href="#leave-block-location-out-lblo"></a>
+</h3>
+<p>Spatially contiguous groups of locations form each fold. Uses k-means clustering internally when <code>cv_fold</code> is an integer.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv_lblo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lblo"</span>, cv_fold <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">rset_lblo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lblo</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lblo"</span><span class="op">)</span></span>
+<span><span class="va">rset_lblo</span></span>
+<span><span class="co">#&gt; # 5-fold spatial block CV</span></span>
+<span></span>
+<span><span class="co"># You can also supply pre-built polygon blocks:</span></span>
+<span><span class="co"># cv_lblo_poly &lt;- generate_cv_index(</span></span>
+<span><span class="co">#   spdat, cv_mode = "lblo",</span></span>
+<span><span class="co">#   blocks = state_polygons, block_id = "STUSPS"</span></span>
+<span><span class="co"># )</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="leave-block-time-out-lbto">Leave-block-time-out (lbto)<a class="anchor" aria-label="anchor" href="#leave-block-time-out-lbto"></a>
+</h3>
+<p>Consecutive time steps are grouped into <code>cv_fold</code> temporal chunks.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv_lbto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lbto"</span>, cv_fold <span class="op">=</span> <span class="fl">6</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">rset_lbto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lbto</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lbto"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="leave-block-location-time-out-lblto">Leave-block-location-time-out (lblto)<a class="anchor" aria-label="anchor" href="#leave-block-location-time-out-lblto"></a>
+</h3>
+<p>Combines spatial and temporal blocking. Each fold is one cell in the <code>sp_fold × t_fold</code> grid of spatiotemporal blocks.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv_lblto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span></span>
+<span>  <span class="va">spdat</span>,</span>
+<span>  cv_mode <span class="op">=</span> <span class="st">"lblto"</span>,</span>
+<span>  sp_fold <span class="op">=</span> <span class="fl">5</span>,</span>
+<span>  t_fold  <span class="op">=</span> <span class="fl">4</span></span>
+<span><span class="op">)</span></span>
+<span><span class="co"># up to 5 × 4 = 20 unique spatiotemporal blocks</span></span>
+<span></span>
+<span><span class="va">rset_lblto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lblto</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lblto"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="random-random">Random (random)<a class="anchor" aria-label="anchor" href="#random-random"></a>
+</h3>
+<p>Plain random k-fold assignment included as a baseline.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">cv_random</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"random"</span>, cv_fold <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">rset_random</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_random</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"random"</span><span class="op">)</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level2">
+<h2 id="visualizing-folds">Visualizing folds<a class="anchor" aria-label="anchor" href="#visualizing-folds"></a>
+</h2>
+<p><code><a href="reference/plot_cv_folds.html">plot_cv_folds()</a></code> renders a 3-D scatter (lon × lat × time) colored by fold, useful for quickly checking that the spatial/temporal structure is captured.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"plotly"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="co"># Spatial block CV — clusters should appear as distinct spatial patches</span></span>
+<span>  <span class="fu"><a href="reference/plot_cv_folds.html">plot_cv_folds</a></span><span class="op">(</span><span class="va">spdat</span>, <span class="va">cv_lblo</span><span class="op">)</span></span>
+<span></span>
+<span>  <span class="co"># Spatiotemporal block CV</span></span>
+<span>  <span class="fu"><a href="reference/plot_cv_folds.html">plot_cv_folds</a></span><span class="op">(</span><span class="va">spdat</span>, <span class="va">cv_lblto</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="integration-with-tidymodels">Integration with tidymodels<a class="anchor" aria-label="anchor" href="#integration-with-tidymodels"></a>
+</h2>
+<p>The <code>rset</code> objects returned by <code><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset()</a></code> are fully compatible with the <code>tune</code> and <code>workflows</code> packages.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://rsample.tidymodels.org" class="external-link">rsample</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/tidymodels/parsnip" class="external-link">parsnip</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/tidymodels/workflows" class="external-link">workflows</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://tune.tidymodels.org/" class="external-link">tune</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Define a simple linear regression model</span></span>
+<span><span class="va">lm_spec</span> <span class="op">&lt;-</span> <span class="fu">linear_reg</span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">set_engine</span><span class="op">(</span><span class="st">"lm"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">wflow</span> <span class="op">&lt;-</span> <span class="fu">workflow</span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">add_formula</span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x1</span> <span class="op">+</span> <span class="va">x2</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">add_model</span><span class="op">(</span><span class="va">lm_spec</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Evaluate using spatial block CV</span></span>
+<span><span class="va">cv_results</span> <span class="op">&lt;-</span> <span class="fu">fit_resamples</span><span class="op">(</span><span class="va">wflow</span>, resamples <span class="op">=</span> <span class="va">rset_lblo</span><span class="op">)</span></span>
+<span><span class="fu">collect_metrics</span><span class="op">(</span><span class="va">cv_results</span><span class="op">)</span></span></code></pre></div>
+</div>
 </div>
   </main><aside class="col-md-3"><div class="links">
 <h2 data-toc-skip>Links</h2>

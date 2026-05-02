@@ -30,8 +30,8 @@
   : Generate spatio-temporal cross-validation index (random)
 - [`generate_spt_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_spt_index.md)
   : Generate unique spatiotemporal identifier from stdt object
-- [`plot_cv_folds_25d()`](https://sigmafelix.github.io/stcvlite/reference/plot_cv_folds_25d.md)
-  : Plot generated CV folds in a 2.5D scatterplot
+- [`plot_cv_folds()`](https://sigmafelix.github.io/stcvlite/reference/plot_cv_folds.md)
+  : Plot generated CV folds
 - [`prep_input()`](https://sigmafelix.github.io/stcvlite/reference/prep_input.md)
   : Convert sf and sftime objects to stdt format
 - [`spdat`](https://sigmafelix.github.io/stcvlite/reference/spdat.md) :

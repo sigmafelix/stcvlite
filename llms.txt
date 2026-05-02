@@ -2,7 +2,261 @@
 
 [![R-CMD-check](https://github.com/sigmafelix/stcvlite/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/sigmafelix/stcvlite/actions/workflows/R-CMD-check.yaml)
 
-Lightweight extension of rsample for spatiotemporal cross-validation
+Lightweight extension of `rsample` for spatiotemporal cross-validation
+
+## What does this package do?
+
+`stcvlite` provides convenient functions to make `rset` objects for
+spatiotemporal cross-validation. `rset` class is a major component of
+`rsample` package, which is a part of `tidymodels` ecosystem, to perform
+hyperparameter tuning and model evaluation for machine learning tasks.
+
+## Cross-validation schemes
+
+The package offers several cross-validation schemes by *what to split
+along*, for example, leave-one-out or leave-block-out along space or
+time indices or by combination of both. The principle encapsulates the
+schemes as acronyms. To note, the terminology is from [Clark et
+al. (2024)](https://doi.org/10.1038/s41370-024-00712-8):
+
+| Family | Scheme | Description |
+|:--:|:--:|:---|
+| LOO | `"lolo"` | Leave-one-location-out. In space-time data, all time indices at each location are assigned to the same fold. |
+| LOO | `"loto"` | Leave-one-time-out. In space-time data, all locations at each time index are assigned to the same fold. |
+| LOO | `"lolto"` | Leave-one-location-time-out. Same as LOO |
+| LBO | `"lblo"` | Leave-block-location-out. Proximal locations are chunked. |
+| LBO | `"lbto"` | Leave-block-time-out. Closer time indices are chunked. |
+| LBO | `"lblto"` | Leave-block-location-time-out. Both locations and time indices are considered in chunking. |
+| Random | `"random"` | Random assignment. Same as plain random CV. |
+
+## Installation
+
+``` r
+
+# install.packages("pak")
+pak::pak("sigmafelix/stcvlite")
+```
+
+## Quick start
+
+``` r
+
+library(stcvlite)
+
+# Load the built-in sample dataset (100 locations × 120 time steps)
+data(spdat)   # an stdt object with lon, lat, time, x1, x2, y columns
+```
+
+## Spatial block creation
+
+Spatial blocks group nearby locations together so that an entire block
+ends up in the same fold, preventing spatial autocorrelation from
+leaking between training and test sets.
+[`generate_block_sp_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_block_sp_index.md)
+attaches a `sp_index` column to the `stdt` object and supports three
+block-definition strategies.
+
+### Strategy 1 — k-means clusters (`cv_fold`)
+
+When `cv_fold` is supplied, coordinates are clustered with k-means.
+
+``` r
+
+data(spdat)
+
+# Create 5 spatial clusters based on (lon, lat)
+spdat_block <- generate_block_sp_index(spdat, cv_fold = 5)
+spdat_block$stdt[, c("lon", "lat", "sp_index")]
+#> lon and lat columns alongside integer cluster ids 1–5
+
+# Inspect cluster sizes and centres (stored as attributes)
+attr(spdat_block$stdt, "kmeans_centers")
+attr(spdat_block$stdt, "kmeans_sizes")
+```
+
+### Strategy 2 — regular grid (`blocks = c(step_lon, step_lat)`)
+
+Pass a length-2 numeric vector to cut the bounding box into rectangular
+cells.
+
+``` r
+
+# ~5° × 5° grid cells
+spdat_grid <- generate_block_sp_index(spdat, blocks = c(5, 5))
+spdat_grid$stdt[, c("lon", "lat", "sp_index")]
+```
+
+### Strategy 3 — arbitrary polygon blocks (`blocks = sf/SpatVector`)
+
+Provide an `sf` or `SpatVector` polygon layer whose features define the
+block boundaries (e.g. states, counties, hydrological units). The
+`block_id` argument names the column that uniquely identifies each
+feature.
+
+``` r
+
+library(sf)
+
+# Example: U.S. state polygons (replace with your own polygon layer)
+state_polygons <- sf::read_sf("path/to/states.gpkg")
+
+spdat_poly <- generate_block_sp_index(
+  spdat,
+  blocks   = state_polygons,
+  block_id = "STUSPS"   # unique state abbreviation column
+)
+spdat_poly$stdt[, c("lon", "lat", "sp_index")]
+```
+
+## Cross-validation schemes
+
+[`generate_cv_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index.md)
+returns an integer (or factor) fold-assignment vector with one value per
+row of the input. Pass this vector together with your data to
+[`convert_cv_index_rset()`](https://sigmafelix.github.io/stcvlite/reference/convert_cv_index_rset.md)
+to obtain a `tidymodels`-compatible `rset` object.
+
+### Leave-one-location-out (lolo)
+
+Each unique location forms one fold; all time steps at that location are
+held out together.
+
+``` r
+
+data(spdat)
+
+cv_lolo <- generate_cv_index(spdat, cv_mode = "lolo")
+# cv_lolo is an integer vector of length nrow(spdat$stdt)
+# unique values == number of unique locations (100)
+
+rset_lolo <- convert_cv_index_rset(cv_lolo, spdat$stdt, cv_mode = "lolo")
+rset_lolo
+```
+
+### Leave-one-time-out (loto)
+
+Each unique time step is one fold; all locations at that time step are
+held out.
+
+``` r
+
+cv_loto <- generate_cv_index(spdat, cv_mode = "loto")
+# unique values == number of unique time steps (120)
+
+rset_loto <- convert_cv_index_rset(cv_loto, spdat$stdt, cv_mode = "loto")
+```
+
+### Leave-one-location-time-out (lolto)
+
+Every single row becomes its own fold (standard LOO). Suitable for small
+datasets.
+
+``` r
+
+cv_lolto <- generate_cv_index(spdat, cv_mode = "lolto")
+```
+
+### Leave-block-location-out (lblo)
+
+Spatially contiguous groups of locations form each fold. Uses k-means
+clustering internally when `cv_fold` is an integer.
+
+``` r
+
+cv_lblo <- generate_cv_index(spdat, cv_mode = "lblo", cv_fold = 5)
+
+rset_lblo <- convert_cv_index_rset(cv_lblo, spdat$stdt, cv_mode = "lblo")
+rset_lblo
+#> # 5-fold spatial block CV
+
+# You can also supply pre-built polygon blocks:
+# cv_lblo_poly <- generate_cv_index(
+#   spdat, cv_mode = "lblo",
+#   blocks = state_polygons, block_id = "STUSPS"
+# )
+```
+
+### Leave-block-time-out (lbto)
+
+Consecutive time steps are grouped into `cv_fold` temporal chunks.
+
+``` r
+
+cv_lbto <- generate_cv_index(spdat, cv_mode = "lbto", cv_fold = 6)
+
+rset_lbto <- convert_cv_index_rset(cv_lbto, spdat$stdt, cv_mode = "lbto")
+```
+
+### Leave-block-location-time-out (lblto)
+
+Combines spatial and temporal blocking. Each fold is one cell in the
+`sp_fold × t_fold` grid of spatiotemporal blocks.
+
+``` r
+
+cv_lblto <- generate_cv_index(
+  spdat,
+  cv_mode = "lblto",
+  sp_fold = 5,
+  t_fold  = 4
+)
+# up to 5 × 4 = 20 unique spatiotemporal blocks
+
+rset_lblto <- convert_cv_index_rset(cv_lblto, spdat$stdt, cv_mode = "lblto")
+```
+
+### Random (random)
+
+Plain random k-fold assignment included as a baseline.
+
+``` r
+
+cv_random <- generate_cv_index(spdat, cv_mode = "random", cv_fold = 10)
+
+rset_random <- convert_cv_index_rset(cv_random, spdat$stdt, cv_mode = "random")
+```
+
+## Visualizing folds
+
+[`plot_cv_folds()`](https://sigmafelix.github.io/stcvlite/reference/plot_cv_folds.md)
+renders a 3-D scatter (lon × lat × time) colored by fold, useful for
+quickly checking that the spatial/temporal structure is captured.
+
+``` r
+
+if (requireNamespace("plotly", quietly = TRUE)) {
+  # Spatial block CV — clusters should appear as distinct spatial patches
+  plot_cv_folds(spdat, cv_lblo)
+
+  # Spatiotemporal block CV
+  plot_cv_folds(spdat, cv_lblto)
+}
+```
+
+## Integration with tidymodels
+
+The `rset` objects returned by
+[`convert_cv_index_rset()`](https://sigmafelix.github.io/stcvlite/reference/convert_cv_index_rset.md)
+are fully compatible with the `tune` and `workflows` packages.
+
+``` r
+
+library(rsample)
+library(parsnip)
+library(workflows)
+library(tune)
+
+# Define a simple linear regression model
+lm_spec <- linear_reg() |> set_engine("lm")
+
+wflow <- workflow() |>
+  add_formula(y ~ x1 + x2) |>
+  add_model(lm_spec)
+
+# Evaluate using spatial block CV
+cv_results <- fit_resamples(wflow, resamples = rset_lblo)
+collect_metrics(cv_results)
+```
 
 # Package index
 
@@ -36,8 +290,8 @@ Lightweight extension of rsample for spatiotemporal cross-validation
   : Generate spatio-temporal cross-validation index (random)
 - [`generate_spt_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_spt_index.md)
   : Generate unique spatiotemporal identifier from stdt object
-- [`plot_cv_folds_25d()`](https://sigmafelix.github.io/stcvlite/reference/plot_cv_folds_25d.md)
-  : Plot generated CV folds in a 2.5D scatterplot
+- [`plot_cv_folds()`](https://sigmafelix.github.io/stcvlite/reference/plot_cv_folds.md)
+  : Plot generated CV folds
 - [`prep_input()`](https://sigmafelix.github.io/stcvlite/reference/prep_input.md)
   : Convert sf and sftime objects to stdt format
 - [`spdat`](https://sigmafelix.github.io/stcvlite/reference/spdat.md) :
