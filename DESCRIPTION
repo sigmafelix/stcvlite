@@ -26,4 +26,5 @@ Config/testthat/edition: 3
 Depends: 
     R (>= 4.1)
 LazyData: true
-URL: https://sigmafelix.github.io/stcvlite
+URL: https://sigmafelix.github.io/stcvlite/, https://github.com/sigmafelix/stcvlite
+BugReports: https://github.com/sigmafelix/stcvlite/issues
