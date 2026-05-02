@@ -6,7 +6,7 @@
 \usage{
 generate_cv_index(
   covars,
-  cv_mode = c("lolo", "loto", "lolto", "random", "lblo", "lbto", "lblto"),
+  cv_mode = c("lolo", "loto", "random", "lblo", "lbto", "lblto", "lolto", "loo"),
   cv_fold = 5L,
   sp_fold = NULL,
   t_fold = NULL,
@@ -22,7 +22,7 @@ generate_cv_index(
 \code{"lolto"} (leave-one-location-time-out),
 \code{"lblo"} (leave-block-location-out),
 \code{"lbto"} (leave-block-time-out),
-\code{"lblto"} (leave-block-location-time-out)
+\code{"loo"}, \code{"lblto"} (leave-block-location-time-out)
 \code{"random"} (full random selection)}
 
 \item{cv_fold}{integer(1). Number of folds for cross-validation.}
@@ -69,7 +69,7 @@ lblo <- generate_cv_index(spdat, cv_mode = "lblo", cv_fold = 5)
 lbto <- generate_cv_index(spdat, cv_mode = "lbto", cv_fold = 5)
 lblto <- generate_cv_index(spdat, cv_mode = "lblto", sp_fold = 5, t_fold = 4)
 random <- generate_cv_index(spdat, cv_mode = "random", cv_fold = 5)
-plot_cv_folds_25d(spdat$stdt, lblto)
+plot_cv_folds(spdat$stdt, lblto)
 }
 \author{
 Insang Song

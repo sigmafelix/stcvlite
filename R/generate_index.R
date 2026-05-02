@@ -5,7 +5,7 @@
 #' `"lolto"` (leave-one-location-time-out),
 #' `"lblo"` (leave-block-location-out),
 #' `"lbto"` (leave-block-time-out),
-#' `"lblto"` (leave-block-location-time-out)
+#' `"loo"`, `"lblto"` (leave-block-location-time-out)
 #' `"random"` (full random selection)
 #' @param cv_fold integer(1). Number of folds for cross-validation.
 #' @param sp_fold integer(1). Number of subfolds for spatial blocks.
@@ -40,11 +40,11 @@
 #' lbto <- generate_cv_index(spdat, cv_mode = "lbto", cv_fold = 5)
 #' lblto <- generate_cv_index(spdat, cv_mode = "lblto", sp_fold = 5, t_fold = 4)
 #' random <- generate_cv_index(spdat, cv_mode = "random", cv_fold = 5)
-#' plot_cv_folds_25d(spdat$stdt, lblto)
+#' plot_cv_folds(spdat$stdt, lblto)
 #' @export
 generate_cv_index <- function(
     covars,
-    cv_mode = c("lolo", "loto", "lolto", "random", "lblo", "lbto", "lblto"),
+    cv_mode = c("lolo", "loto", "random", "lblo", "lbto", "lblto", "lolto", "loo"),
     cv_fold = 5L,
     sp_fold = NULL,
     t_fold = NULL,
@@ -75,6 +75,7 @@ generate_cv_index <- function(
     lolo = generate_cv_index_lolo(covars),
     loto = generate_cv_index_loto(covars),
     lolto = generate_cv_index_lolto(covars),
+    loo = generate_cv_index_lolto(covars),
     lblo = generate_cv_index_lblo(covars, cv_fold, blocks, block_id),
     lbto = generate_cv_index_lbto(covars, cv_fold),
     lblto = generate_cv_index_lblto(covars,
@@ -140,7 +141,7 @@ generate_spt_index <- function(
 #' covars_block <- generate_block_sp_index(covars, cv_fold = 5)
 #' covars_block$stdt
 #'
-#' plot_cv_folds_25d(covars_block$stdt, covars_block$stdt$sp_index)
+#' plot_cv_folds(covars_block$stdt, covars_block$stdt$sp_index)
 #' @importFrom methods is
 #' @importFrom stats kmeans
 #' @importFrom sf st_join

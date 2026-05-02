@@ -10,8 +10,22 @@
 
 The main functions provide rset generators for spatiotemporal cross-validation with low footprint.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://sigmafelix.github.io/stcvlite/}
+  \item \url{https://github.com/sigmafelix/stcvlite}
+  \item Report bugs at \url{https://github.com/sigmafelix/stcvlite/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Insang Song \email{geoissong@gmail.com} (\href{https://orcid.org/0000-0001-8732-3256}{ORCID})
+
+Authors:
+\itemize{
+  \item Insang Song \email{geoissong@gmail.com} (\href{https://orcid.org/0000-0001-8732-3256}{ORCID})
+}
 
 }
 \keyword{internal}

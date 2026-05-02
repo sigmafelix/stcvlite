@@ -34,7 +34,7 @@ covars <- spdat
 covars_block <- generate_block_sp_index(covars, cv_fold = 5)
 covars_block$stdt
 
-plot_cv_folds_25d(covars_block$stdt, covars_block$stdt$sp_index)
+plot_cv_folds(covars_block$stdt, covars_block$stdt$sp_index)
 }
 \author{
 Insang Song
