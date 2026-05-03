@@ -23,7 +23,7 @@ al. (2024)](https://doi.org/10.1038/s41370-024-00712-8):
 |:--:|:--:|:---|
 | LOO | `"lolo"` | Leave-one-location-out. In space-time data, all time indices at each location are assigned to the same fold. |
 | LOO | `"loto"` | Leave-one-time-out. In space-time data, all locations at each time index are assigned to the same fold. |
-| LOO | `"lolto"` | Leave-one-location-time-out. Same as LOO |
+| LOO | `"lolto"` | Leave-one-location-time-out. Same as plain LOOCV |
 | LBO | `"lblo"` | Leave-block-location-out. Proximal locations are chunked. |
 | LBO | `"lbto"` | Leave-block-time-out. Closer time indices are chunked. |
 | LBO | `"lblto"` | Leave-block-location-time-out. Both locations and time indices are considered in chunking. |
@@ -56,9 +56,10 @@ leaking between training and test sets.
 attaches a `sp_index` column to the `stdt` object and supports three
 block-definition strategies.
 
-### Strategy 1 — k-means clusters (`cv_fold`)
+### Strategy 1 — density-based clustering
 
-When `cv_fold` is supplied, coordinates are clustered with k-means.
+When `cv_fold` is supplied without `blocks`, coordinates are clustered
+with DBSCAN.
 
 ``` r
 
@@ -68,10 +69,6 @@ data(spdat)
 spdat_block <- generate_block_sp_index(spdat, cv_fold = 5)
 spdat_block$stdt[, c("lon", "lat", "sp_index")]
 #> lon and lat columns alongside integer cluster ids 1–5
-
-# Inspect cluster sizes and centres (stored as attributes)
-attr(spdat_block$stdt, "kmeans_centers")
-attr(spdat_block$stdt, "kmeans_sizes")
 ```
 
 ### Strategy 2 — regular grid (`blocks = c(step_lon, step_lat)`)
@@ -190,7 +187,7 @@ rset_lbto <- convert_cv_index_rset(cv_lbto, spdat$stdt, cv_mode = "lbto")
 ### Leave-block-location-time-out (lblto)
 
 Combines spatial and temporal blocking. Each fold is one cell in the
-`sp_fold × t_fold` grid of spatiotemporal blocks.
+`sp_fold * t_fold` grid of spatiotemporal blocks.
 
 ``` r
 

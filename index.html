@@ -87,7 +87,7 @@
 <tr>
 <td align="center">LOO</td>
 <td align="center"><code>"lolto"</code></td>
-<td align="left">Leave-one-location-time-out. Same as LOO</td>
+<td align="left">Leave-one-location-time-out. Same as plain LOOCV</td>
 </tr>
 <tr>
 <td align="center">LBO</td>
@@ -133,20 +133,16 @@
 </h2>
 <p>Spatial blocks group nearby locations together so that an entire block ends up in the same fold, preventing spatial autocorrelation from leaking between training and test sets. <code><a href="reference/generate_block_sp_index.html">generate_block_sp_index()</a></code> attaches a <code>sp_index</code> column to the <code>stdt</code> object and supports three block-definition strategies.</p>
 <div class="section level3">
-<h3 id="strategy-1--k-means-clusters-cv_fold">Strategy 1 — k-means clusters (<code>cv_fold</code>)<a class="anchor" aria-label="anchor" href="#strategy-1--k-means-clusters-cv_fold"></a>
+<h3 id="strategy-1--density-based-clustering">Strategy 1 — density-based clustering<a class="anchor" aria-label="anchor" href="#strategy-1--density-based-clustering"></a>
 </h3>
-<p>When <code>cv_fold</code> is supplied, coordinates are clustered with k-means.</p>
+<p>When <code>cv_fold</code> is supplied without <code>blocks</code>, coordinates are clustered with DBSCAN.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Create 5 spatial clusters based on (lon, lat)</span></span>
 <span><span class="va">spdat_block</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_block_sp_index.html">generate_block_sp_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_fold <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
 <span><span class="va">spdat_block</span><span class="op">$</span><span class="va">stdt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="co">#&gt; lon and lat columns alongside integer cluster ids 1–5</span></span>
-<span></span>
-<span><span class="co"># Inspect cluster sizes and centres (stored as attributes)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">spdat_block</span><span class="op">$</span><span class="va">stdt</span>, <span class="st">"kmeans_centers"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">spdat_block</span><span class="op">$</span><span class="va">stdt</span>, <span class="st">"kmeans_sizes"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co">#&gt; lon and lat columns alongside integer cluster ids 1–5</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="strategy-2--regular-grid-blocks--cstep_lon-step_lat">Strategy 2 — regular grid (<code>blocks = c(step_lon, step_lat)</code>)<a class="anchor" aria-label="anchor" href="#strategy-2--regular-grid-blocks--cstep_lon-step_lat"></a>
@@ -239,7 +235,7 @@
 <div class="section level3">
 <h3 id="leave-block-location-time-out-lblto">Leave-block-location-time-out (lblto)<a class="anchor" aria-label="anchor" href="#leave-block-location-time-out-lblto"></a>
 </h3>
-<p>Combines spatial and temporal blocking. Each fold is one cell in the <code>sp_fold × t_fold</code> grid of spatiotemporal blocks.</p>
+<p>Combines spatial and temporal blocking. Each fold is one cell in the <code>sp_fold * t_fold</code> grid of spatiotemporal blocks.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cv_lblto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span></span>
 <span>  <span class="va">spdat</span>,</span>
