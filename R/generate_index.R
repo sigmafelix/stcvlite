@@ -143,7 +143,6 @@ generate_spt_index <- function(
 #'
 #' plot_cv_folds(covars_block$stdt, covars_block$stdt$sp_index)
 #' @importFrom methods is
-#' @importFrom stats kmeans
 #' @importFrom sf st_join
 #' @importFrom terra intersect
 #' @importFrom data.table .SD
