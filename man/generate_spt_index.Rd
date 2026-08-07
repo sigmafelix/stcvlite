@@ -7,7 +7,8 @@
 generate_spt_index(covars, mode = c("spatial", "spatiotemporal"))
 }
 \arguments{
-\item{covars}{stdt. See \code{\link[=prep_input]{prep_input()}}}
+\item{covars}{data.frame-like object with \code{lon}, \code{lat}, and \code{time}
+columns. See \code{\link[=prep_input]{prep_input()}}}
 
 \item{mode}{One of \code{"spatial"} or \code{"spatiotemporal"}}
 }

@@ -25,6 +25,7 @@ Useful links:
 Authors:
 \itemize{
   \item Insang Song \email{geoissong@gmail.com} (\href{https://orcid.org/0000-0001-8732-3256}{ORCID})
+  \item Eva Marques [contributor]
 }
 
 }

@@ -15,7 +15,8 @@ generate_cv_index(
 )
 }
 \arguments{
-\item{covars}{stdt. See \code{\link[=prep_input]{prep_input()}} for details.}
+\item{covars}{data.frame-like object with \code{lon}, \code{lat}, and \code{time}
+columns. See \code{\link[=prep_input]{prep_input()}} for details.}
 
 \item{cv_mode}{character(1). One of \code{"lolo"} (leave-one-location-out),
 \code{"loto"} (leave-one-time-out),
@@ -69,7 +70,7 @@ lblo <- generate_cv_index(spdat, cv_mode = "lblo", cv_fold = 5)
 lbto <- generate_cv_index(spdat, cv_mode = "lbto", cv_fold = 5)
 lblto <- generate_cv_index(spdat, cv_mode = "lblto", sp_fold = 5, t_fold = 4)
 random <- generate_cv_index(spdat, cv_mode = "random", cv_fold = 5)
-plot_cv_folds(spdat$stdt, lblto)
+plot_cv_folds(spdat, lblto)
 }
 \author{
 Insang Song

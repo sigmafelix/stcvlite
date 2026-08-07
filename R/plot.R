@@ -4,11 +4,10 @@
 #' number shown by color. For large datasets, points are downsampled to
 #' at most `max_points` for display.
 #'
-#' @param covars A `stdt` object (recommended) or a `data.frame`/`data.table`
-#'   that contains `lon` and `lat` columns.
+#' @param covars A `data.frame`/`data.table` (or inheriting object) that
+#'   contains `lon` and `lat` columns.
 #' @param cv_index Fold assignment vector returned by [generate_cv_index()].
-#'   Must have length `nrow(covars$stdt)` for `stdt` input or `nrow(covars)`
-#'   for table-like input.
+#'   Must have length `nrow(covars)`.
 #' @param max_points Maximum number of points to display (default `10000`).
 #' @param seed Random seed used when downsampling.
 #'
@@ -34,11 +33,7 @@ plot_cv_folds <-
       stop("Package 'plotly' is required for plot_cv_folds_25d().", call. = FALSE)
     }
 
-    if (any("stdt" %in% class(covars))) {
-      coords <- covars$stdt
-    } else {
-      coords <- covars
-    }
+    coords <- covars
 
     if (!is.data.frame(coords) || !all(c("lon", "lat") %in% names(coords))) {
       stop("`covars` must contain `lon` and `lat` columns.", call. = FALSE)

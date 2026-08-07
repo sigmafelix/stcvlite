@@ -11,7 +11,7 @@ testthat::test_that("scaled rset works with tidymodels workflow across splits", 
 
   rset_obj <- stcvlite::convert_cv_index_rset(
     cvindex = cvindex,
-    data = covars$stdt,
+    data = covars,
     cv_mode = "lblo"
   )
 

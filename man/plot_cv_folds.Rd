@@ -7,12 +7,11 @@
 plot_cv_folds(covars, cv_index, max_points = 1200L, seed = 2026L)
 }
 \arguments{
-\item{covars}{A \code{stdt} object (recommended) or a \code{data.frame}/\code{data.table}
-that contains \code{lon} and \code{lat} columns.}
+\item{covars}{A \code{data.frame}/\code{data.table} (or inheriting object) that
+contains \code{lon} and \code{lat} columns.}
 
 \item{cv_index}{Fold assignment vector returned by \code{\link[=generate_cv_index]{generate_cv_index()}}.
-Must have length \code{nrow(covars$stdt)} for \code{stdt} input or \code{nrow(covars)}
-for table-like input.}
+Must have length \code{nrow(covars)}.}
 
 \item{max_points}{Maximum number of points to display (default \code{10000}).}
 

@@ -9,7 +9,7 @@ convert_cv_index_rset(cvindex, data, cv_mode)
 \arguments{
 \item{cvindex}{integer. Output of \code{\link{generate_cv_index}}.}
 
-\item{data}{data.frame from \code{stdt}. Should be the
+\item{data}{data.frame-like object. Should be the
 same object as what was used for \code{covars} argument of \code{\link{generate_cv_index}}}
 
 \item{cv_mode}{character(1). Spatiotemporal cross-validation indexing method.

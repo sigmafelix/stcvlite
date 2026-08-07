@@ -5,8 +5,8 @@
 \alias{spdat}
 \title{Sample full spatiotemporal point data}
 \format{
-A data frame with 12,000 rows (100 locations * 120 times) and
-three variables:
+A \code{data.table} with 12,000 rows (100 locations * 120 times) and
+six variables, plus a \code{"crs"} attribute (\code{attr(spdat, "crs")}):
 \describe{
 \item{time}{Unique point identifier. Arbitrarily generated.}
 \item{lon}{Longitude}

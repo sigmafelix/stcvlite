@@ -6,10 +6,8 @@ make_covars_fixture <- function() {
     value = 1:6
   )
 
-  structure(
-    list(stdt = dt, crs = "EPSG:4326"),
-    class = "stdt"
-  )
+  attr(dt, "crs") <- "EPSG:4326"
+  dt
 }
 
 
@@ -40,10 +38,8 @@ make_covars_fixture_scaled <- function(
 
   data.table::setcolorder(dt, c("lon", "lat", "time", "x1", "x2", "y"))
 
-  structure(
-    list(stdt = dt, crs = "EPSG:4326"),
-    class = "stdt"
-  )
+  attr(dt, "crs") <- "EPSG:4326"
+  dt
 }
 
 make_blocks_fixture <- function(input) {

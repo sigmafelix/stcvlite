@@ -7,7 +7,8 @@
 generate_cv_index_loto(covars)
 }
 \arguments{
-\item{covars}{stdt. See \code{\link[=prep_input]{prep_input()}} for details.}
+\item{covars}{data.frame-like object with \code{lon}, \code{lat}, and \code{time}
+columns. See \code{\link[=prep_input]{prep_input()}} for details.}
 }
 \value{
 An integer vector.

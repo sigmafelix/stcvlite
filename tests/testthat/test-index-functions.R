@@ -4,20 +4,20 @@ testthat::test_that("generate_spt_index creates spatial and spatiotemporal ident
   out_sp <- stcvlite::generate_spt_index(covars, mode = "spatial")
   out_spt <- stcvlite::generate_spt_index(covars, mode = "spatiotemporal")
 
-  testthat::expect_true("sp_index" %in% names(out_sp$stdt))
-  testthat::expect_equal(length(unique(out_sp$stdt$sp_index)), 3)
-  testthat::expect_equal(length(unique(out_spt$stdt$sp_index)), nrow(covars$stdt))
+  testthat::expect_true("sp_index" %in% names(out_sp))
+  testthat::expect_equal(length(unique(out_sp$sp_index)), 3)
+  testthat::expect_equal(length(unique(out_spt$sp_index)), nrow(covars))
 })
 
 testthat::test_that("generate_block_sp_index supports kmeans and numeric blocks", {
   covars <- make_covars_fixture()
 
   out_km <- stcvlite::generate_block_sp_index(covars, cv_fold = 2)
-  testthat::expect_true("sp_index" %in% names(out_km$stdt))
+  testthat::expect_true("sp_index" %in% names(out_km))
 
   out_grid <- stcvlite::generate_block_sp_index(covars, blocks = c(1, 1))
-  testthat::expect_true("sp_index" %in% names(out_grid$stdt))
-  testthat::expect_equal(length(out_grid$stdt$sp_index), nrow(covars$stdt))
+  testthat::expect_true("sp_index" %in% names(out_grid))
+  testthat::expect_equal(length(out_grid$sp_index), nrow(covars))
 })
 
 testthat::test_that("index generators return expected fold structures", {
@@ -32,8 +32,8 @@ testthat::test_that("index generators return expected fold structures", {
 
   testthat::expect_equal(length(unique(idx_loto)), 2)
   testthat::expect_equal(length(unique(idx_lolo)), 3)
-  testthat::expect_equal(idx_lolto, seq_len(nrow(covars$stdt)))
-  testthat::expect_equal(length(idx_lblo), nrow(covars$stdt))
+  testthat::expect_equal(idx_lolto, seq_len(nrow(covars)))
+  testthat::expect_equal(length(idx_lblo), nrow(covars))
   testthat::expect_true(all(idx_lblo >= 1 & idx_lblo <= 2))
   testthat::expect_true(all(idx_lbto >= 1 & idx_lbto <= 2))
   testthat::expect_true(all(idx_lblto >= 1))
@@ -62,7 +62,7 @@ testthat::test_that("lblo cases are consistent across generate_cv_index* functio
   )
 
   testthat::expect_equal(idx_lblo_blocks_dispatch, idx_lblo_blocks_direct)
-  testthat::expect_equal(length(idx_lblo_blocks_direct), nrow(covars$stdt))
+  testthat::expect_equal(length(idx_lblo_blocks_direct), nrow(covars))
 
   testthat::expect_error(
     stcvlite::generate_cv_index_lblo(covars, cv_fold = NULL),
@@ -116,8 +116,8 @@ testthat::test_that("generate_cv_index validates arguments", {
   covars <- make_covars_fixture()
 
   testthat::expect_error(
-    stcvlite::generate_cv_index(covars$stdt),
-    "Only stdt object is acceptable"
+    stcvlite::generate_cv_index(data.frame(x = 1)),
+    "data.frame-like object"
   )
   testthat::expect_error(
     stcvlite::generate_cv_index(covars, cv_mode = "loto", sp_fold = 2),

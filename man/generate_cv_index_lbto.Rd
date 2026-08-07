@@ -7,7 +7,8 @@
 generate_cv_index_lbto(covars, cv_fold = NULL)
 }
 \arguments{
-\item{covars}{stdt. See \code{\link[=prep_input]{prep_input()}} for details.}
+\item{covars}{data.frame-like object with \code{lon}, \code{lat}, and \code{time}
+columns. See \code{\link[=prep_input]{prep_input()}} for details.}
 
 \item{cv_fold}{integer(1). Number of folds for cross-validation.}
 }
