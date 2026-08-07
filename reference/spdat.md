@@ -12,8 +12,8 @@ spdat
 
 ## Format
 
-A data frame with 12,000 rows (100 locations \* 120 times) and three
-variables:
+A `data.table` with 12,000 rows (100 locations \* 120 times) and six
+variables, plus a `"crs"` attribute (`attr(spdat, "crs")`):
 
 - time:
 

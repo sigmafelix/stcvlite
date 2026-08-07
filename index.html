@@ -23,7 +23,7 @@
 
     <a class="navbar-brand me-2" href="index.html">stcvlite</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.4.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,6 +33,12 @@
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
+<li><a class="dropdown-item" href="articles/air-xgboost-bart.html">Spatiotemporal CV on gstat's Air Quality Data with xgboost and BART</a></li>
+  </ul>
+</li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -126,22 +132,20 @@
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://sigmafelix.github.io/stcvlite/">stcvlite</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Load the built-in sample dataset (100 locations × 120 time steps)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span>   <span class="co"># an stdt object with lon, lat, time, x1, x2, y columns</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span>   <span class="co"># a data.table with lon, lat, time, x1, x2, y columns</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="spatial-block-creation">Spatial block creation<a class="anchor" aria-label="anchor" href="#spatial-block-creation"></a>
 </h2>
-<p>Spatial blocks group nearby locations together so that an entire block ends up in the same fold, preventing spatial autocorrelation from leaking between training and test sets. <code><a href="reference/generate_block_sp_index.html">generate_block_sp_index()</a></code> attaches a <code>sp_index</code> column to the <code>stdt</code> object and supports three block-definition strategies.</p>
+<p>Spatial blocks group nearby locations together so that an entire block ends up in the same fold, preventing spatial autocorrelation from leaking between training and test sets. <code><a href="reference/generate_block_sp_index.html">generate_block_sp_index()</a></code> attaches a <code>sp_index</code> column to the covariate table and supports three block-definition strategies.</p>
 <div class="section level3">
 <h3 id="strategy-1--density-based-clustering">Strategy 1 — density-based clustering<a class="anchor" aria-label="anchor" href="#strategy-1--density-based-clustering"></a>
 </h3>
 <p>When <code>cv_fold</code> is supplied without <code>blocks</code>, coordinates are clustered with DBSCAN.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Create 5 spatial clusters based on (lon, lat)</span></span>
+<code class="sourceCode R"><span><span class="co"># Create 5 spatial clusters based on (lon, lat)</span></span>
 <span><span class="va">spdat_block</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_block_sp_index.html">generate_block_sp_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_fold <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
-<span><span class="va">spdat_block</span><span class="op">$</span><span class="va">stdt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="va">spdat_block</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt; lon and lat columns alongside integer cluster ids 1–5</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -151,7 +155,7 @@
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># ~5° × 5° grid cells</span></span>
 <span><span class="va">spdat_grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_block_sp_index.html">generate_block_sp_index</a></span><span class="op">(</span><span class="va">spdat</span>, blocks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">spdat_grid</span><span class="op">$</span><span class="va">stdt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
+<span><span class="va">spdat_grid</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="strategy-3--arbitrary-polygon-blocks-blocks--sfspatvector">Strategy 3 — arbitrary polygon blocks (<code>blocks = sf/SpatVector</code>)<a class="anchor" aria-label="anchor" href="#strategy-3--arbitrary-polygon-blocks-blocks--sfspatvector"></a>
@@ -168,7 +172,7 @@
 <span>  blocks   <span class="op">=</span> <span class="va">state_polygons</span>,</span>
 <span>  block_id <span class="op">=</span> <span class="st">"STUSPS"</span>   <span class="co"># unique state abbreviation column</span></span>
 <span><span class="op">)</span></span>
-<span><span class="va">spdat_poly</span><span class="op">$</span><span class="va">stdt</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
+<span><span class="va">spdat_poly</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"lon"</span>, <span class="st">"lat"</span>, <span class="st">"sp_index"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
@@ -183,10 +187,10 @@
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="va">spdat</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">cv_lolo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lolo"</span><span class="op">)</span></span>
-<span><span class="co"># cv_lolo is an integer vector of length nrow(spdat$stdt)</span></span>
+<span><span class="co"># cv_lolo is an integer vector of length nrow(spdat)</span></span>
 <span><span class="co"># unique values == number of unique locations (100)</span></span>
 <span></span>
-<span><span class="va">rset_lolo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lolo</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lolo"</span><span class="op">)</span></span>
+<span><span class="va">rset_lolo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lolo</span>, <span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lolo"</span><span class="op">)</span></span>
 <span><span class="va">rset_lolo</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -197,7 +201,7 @@
 <code class="sourceCode R"><span><span class="va">cv_loto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"loto"</span><span class="op">)</span></span>
 <span><span class="co"># unique values == number of unique time steps (120)</span></span>
 <span></span>
-<span><span class="va">rset_loto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_loto</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"loto"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">rset_loto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_loto</span>, <span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"loto"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="leave-one-location-time-out-lolto">Leave-one-location-time-out (lolto)<a class="anchor" aria-label="anchor" href="#leave-one-location-time-out-lolto"></a>
@@ -213,7 +217,7 @@
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cv_lblo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lblo"</span>, cv_fold <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">rset_lblo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lblo</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lblo"</span><span class="op">)</span></span>
+<span><span class="va">rset_lblo</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lblo</span>, <span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lblo"</span><span class="op">)</span></span>
 <span><span class="va">rset_lblo</span></span>
 <span><span class="co">#&gt; # 5-fold spatial block CV</span></span>
 <span></span>
@@ -230,7 +234,7 @@
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cv_lbto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lbto"</span>, cv_fold <span class="op">=</span> <span class="fl">6</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">rset_lbto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lbto</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lbto"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">rset_lbto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lbto</span>, <span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lbto"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="leave-block-location-time-out-lblto">Leave-block-location-time-out (lblto)<a class="anchor" aria-label="anchor" href="#leave-block-location-time-out-lblto"></a>
@@ -245,7 +249,7 @@
 <span><span class="op">)</span></span>
 <span><span class="co"># up to 5 × 4 = 20 unique spatiotemporal blocks</span></span>
 <span></span>
-<span><span class="va">rset_lblto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lblto</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"lblto"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">rset_lblto</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_lblto</span>, <span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"lblto"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="random-random">Random (random)<a class="anchor" aria-label="anchor" href="#random-random"></a>
@@ -254,7 +258,7 @@
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cv_random</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/generate_cv_index.html">generate_cv_index</a></span><span class="op">(</span><span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"random"</span>, cv_fold <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">rset_random</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_random</span>, <span class="va">spdat</span><span class="op">$</span><span class="va">stdt</span>, cv_mode <span class="op">=</span> <span class="st">"random"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">rset_random</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/convert_cv_index_rset.html">convert_cv_index_rset</a></span><span class="op">(</span><span class="va">cv_random</span>, <span class="va">spdat</span>, cv_mode <span class="op">=</span> <span class="st">"random"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
@@ -288,8 +292,35 @@
 <span>  <span class="fu">add_model</span><span class="op">(</span><span class="va">lm_spec</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Evaluate using spatial block CV</span></span>
-<span><span class="va">cv_results</span> <span class="op">&lt;-</span> <span class="fu">fit_resamples</span><span class="op">(</span><span class="va">wflow</span>, resamples <span class="op">=</span> <span class="va">rset_lblo</span><span class="op">)</span></span>
-<span><span class="fu">collect_metrics</span><span class="op">(</span><span class="va">cv_results</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">cv_results_lblo</span> <span class="op">&lt;-</span> <span class="fu">fit_resamples</span><span class="op">(</span><span class="va">wflow</span>, resamples <span class="op">=</span> <span class="va">rset_lblo</span><span class="op">)</span></span>
+<span><span class="fu">collect_metrics</span><span class="op">(</span><span class="va">cv_results_lblo</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># # A tibble: 2 × 6</span></span>
+<span><span class="co">#   .metric .estimator   mean     n std_err .config        </span></span>
+<span><span class="co">#   &lt;chr&gt;   &lt;chr&gt;       &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;          </span></span>
+<span><span class="co"># 1 rmse    standard   5.24       5 0.0108  pre0_mod0_post0</span></span>
+<span><span class="co"># 2 rsq     standard   0.0116     5 0.00110 pre0_mod0_post0</span></span>
+<span></span>
+<span></span>
+<span><span class="co"># Evaluate using spatiotemporal block CV</span></span>
+<span><span class="va">cv_results_lbto</span> <span class="op">&lt;-</span> <span class="fu">fit_resamples</span><span class="op">(</span><span class="va">wflow</span>, resamples <span class="op">=</span> <span class="va">rset_lbto</span><span class="op">)</span></span>
+<span><span class="fu">collect_metrics</span><span class="op">(</span><span class="va">cv_results_lbto</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># # A tibble: 2 × 6</span></span>
+<span><span class="co">#   .metric .estimator  mean     n std_err .config        </span></span>
+<span><span class="co">#   &lt;chr&gt;   &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;          </span></span>
+<span><span class="co"># 1 rmse    standard   5.53      6 1.28    pre0_mod0_post0</span></span>
+<span><span class="co"># 2 rsq     standard   0.303     6 0.00171 pre0_mod0_post0</span></span>
+<span></span>
+<span><span class="co"># Evaluate using spatiotemporal block CV</span></span>
+<span><span class="va">cv_results_lblto</span> <span class="op">&lt;-</span> <span class="fu">fit_resamples</span><span class="op">(</span><span class="va">wflow</span>, resamples <span class="op">=</span> <span class="va">rset_lblto</span><span class="op">)</span></span>
+<span><span class="fu">collect_metrics</span><span class="op">(</span><span class="va">cv_results_lblto</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># # A tibble: 2 × 6</span></span>
+<span><span class="co">#   .metric .estimator  mean     n std_err .config        </span></span>
+<span><span class="co">#   &lt;chr&gt;   &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;chr&gt;          </span></span>
+<span><span class="co"># 1 rmse    standard   5.02     20 0.540   pre0_mod0_post0</span></span>
+<span><span class="co"># 2 rsq     standard   0.155    20 0.00665 pre0_mod0_post0</span></span></code></pre></div>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
@@ -335,7 +366,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

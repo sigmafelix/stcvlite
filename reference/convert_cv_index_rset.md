@@ -17,7 +17,7 @@ convert_cv_index_rset(cvindex, data, cv_mode)
 
 - data:
 
-  data.frame from `stdt`. Should be the same object as what was used for
+  data.frame-like object. Should be the same object as what was used for
   `covars` argument of
   [`generate_cv_index`](https://sigmafelix.github.io/stcvlite/reference/generate_cv_index.md)
 

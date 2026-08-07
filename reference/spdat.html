@@ -11,7 +11,7 @@ to demonstrate the functions in stcvlite."><meta property="og:image" content="ht
 
     <a class="navbar-brand me-2" href="../index.html">stcvlite</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.4.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -20,6 +20,10 @@ to demonstrate the functions in stcvlite."><meta property="og:image" content="ht
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+<li class="nav-item dropdown">
+  <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/air-xgboost-bart.html">Spatiotemporal CV on gstat's Air Quality Data with xgboost and BART</a></li>
+  </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json"></form></li>
 <li class="nav-item"><a class="external-link nav-link" href="https://github.com/sigmafelix/stcvlite/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
@@ -31,7 +35,7 @@ to demonstrate the functions in stcvlite."><meta property="og:image" content="ht
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Sample full spatiotemporal point data</h1>
-      <small class="dont-index">Source: <a href="https://github.com/sigmafelix/stcvlite/blob/v0.2.4/R/dataset.R" class="external-link"><code>R/dataset.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/sigmafelix/stcvlite/blob/main/R/dataset.R" class="external-link"><code>R/dataset.R</code></a></small>
       <div class="d-none name"><code>spdat.Rd</code></div>
     </div>
 
@@ -48,8 +52,8 @@ to demonstrate the functions in <code>stcvlite</code>.</p>
 
     <div class="section level2">
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
-    <p>A data frame with 12,000 rows (100 locations * 120 times) and
-three variables:</p><dl><dt>time</dt>
+    <p>A <code>data.table</code> with 12,000 rows (100 locations * 120 times) and
+six variables, plus a <code>"crs"</code> attribute (<code>attr(spdat, "crs")</code>):</p><dl><dt>time</dt>
 <dd><p>Unique point identifier. Arbitrarily generated.</p></dd>
 
 <dt>lon</dt>
@@ -88,7 +92,7 @@ three variables:</p><dl><dt>time</dt>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

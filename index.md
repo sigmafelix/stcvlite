@@ -44,7 +44,7 @@ pak::pak("sigmafelix/stcvlite")
 library(stcvlite)
 
 # Load the built-in sample dataset (100 locations × 120 time steps)
-data(spdat)   # an stdt object with lon, lat, time, x1, x2, y columns
+data(spdat)   # a data.table with lon, lat, time, x1, x2, y columns
 ```
 
 ## Spatial block creation
@@ -53,7 +53,7 @@ Spatial blocks group nearby locations together so that an entire block
 ends up in the same fold, preventing spatial autocorrelation from
 leaking between training and test sets.
 [`generate_block_sp_index()`](https://sigmafelix.github.io/stcvlite/reference/generate_block_sp_index.md)
-attaches a `sp_index` column to the `stdt` object and supports three
+attaches a `sp_index` column to the covariate table and supports three
 block-definition strategies.
 
 ### Strategy 1 — density-based clustering
@@ -63,11 +63,9 @@ with DBSCAN.
 
 ``` r
 
-data(spdat)
-
 # Create 5 spatial clusters based on (lon, lat)
 spdat_block <- generate_block_sp_index(spdat, cv_fold = 5)
-spdat_block$stdt[, c("lon", "lat", "sp_index")]
+spdat_block[, c("lon", "lat", "sp_index")]
 #> lon and lat columns alongside integer cluster ids 1–5
 ```
 
@@ -80,7 +78,7 @@ cells.
 
 # ~5° × 5° grid cells
 spdat_grid <- generate_block_sp_index(spdat, blocks = c(5, 5))
-spdat_grid$stdt[, c("lon", "lat", "sp_index")]
+spdat_grid[, c("lon", "lat", "sp_index")]
 ```
 
 ### Strategy 3 — arbitrary polygon blocks (`blocks = sf/SpatVector`)
@@ -102,7 +100,7 @@ spdat_poly <- generate_block_sp_index(
   blocks   = state_polygons,
   block_id = "STUSPS"   # unique state abbreviation column
 )
-spdat_poly$stdt[, c("lon", "lat", "sp_index")]
+spdat_poly[, c("lon", "lat", "sp_index")]
 ```
 
 ## Cross-validation schemes
@@ -123,10 +121,10 @@ held out together.
 data(spdat)
 
 cv_lolo <- generate_cv_index(spdat, cv_mode = "lolo")
-# cv_lolo is an integer vector of length nrow(spdat$stdt)
+# cv_lolo is an integer vector of length nrow(spdat)
 # unique values == number of unique locations (100)
 
-rset_lolo <- convert_cv_index_rset(cv_lolo, spdat$stdt, cv_mode = "lolo")
+rset_lolo <- convert_cv_index_rset(cv_lolo, spdat, cv_mode = "lolo")
 rset_lolo
 ```
 
@@ -140,7 +138,7 @@ held out.
 cv_loto <- generate_cv_index(spdat, cv_mode = "loto")
 # unique values == number of unique time steps (120)
 
-rset_loto <- convert_cv_index_rset(cv_loto, spdat$stdt, cv_mode = "loto")
+rset_loto <- convert_cv_index_rset(cv_loto, spdat, cv_mode = "loto")
 ```
 
 ### Leave-one-location-time-out (lolto)
@@ -162,7 +160,7 @@ clustering internally when `cv_fold` is an integer.
 
 cv_lblo <- generate_cv_index(spdat, cv_mode = "lblo", cv_fold = 5)
 
-rset_lblo <- convert_cv_index_rset(cv_lblo, spdat$stdt, cv_mode = "lblo")
+rset_lblo <- convert_cv_index_rset(cv_lblo, spdat, cv_mode = "lblo")
 rset_lblo
 #> # 5-fold spatial block CV
 
@@ -181,7 +179,7 @@ Consecutive time steps are grouped into `cv_fold` temporal chunks.
 
 cv_lbto <- generate_cv_index(spdat, cv_mode = "lbto", cv_fold = 6)
 
-rset_lbto <- convert_cv_index_rset(cv_lbto, spdat$stdt, cv_mode = "lbto")
+rset_lbto <- convert_cv_index_rset(cv_lbto, spdat, cv_mode = "lbto")
 ```
 
 ### Leave-block-location-time-out (lblto)
@@ -199,7 +197,7 @@ cv_lblto <- generate_cv_index(
 )
 # up to 5 × 4 = 20 unique spatiotemporal blocks
 
-rset_lblto <- convert_cv_index_rset(cv_lblto, spdat$stdt, cv_mode = "lblto")
+rset_lblto <- convert_cv_index_rset(cv_lblto, spdat, cv_mode = "lblto")
 ```
 
 ### Random (random)
@@ -210,7 +208,7 @@ Plain random k-fold assignment included as a baseline.
 
 cv_random <- generate_cv_index(spdat, cv_mode = "random", cv_fold = 10)
 
-rset_random <- convert_cv_index_rset(cv_random, spdat$stdt, cv_mode = "random")
+rset_random <- convert_cv_index_rset(cv_random, spdat, cv_mode = "random")
 ```
 
 ## Visualizing folds
@@ -251,6 +249,33 @@ wflow <- workflow() |>
   add_model(lm_spec)
 
 # Evaluate using spatial block CV
-cv_results <- fit_resamples(wflow, resamples = rset_lblo)
-collect_metrics(cv_results)
+cv_results_lblo <- fit_resamples(wflow, resamples = rset_lblo)
+collect_metrics(cv_results_lblo)
+
+# # A tibble: 2 × 6
+#   .metric .estimator   mean     n std_err .config        
+#   <chr>   <chr>       <dbl> <int>   <dbl> <chr>          
+# 1 rmse    standard   5.24       5 0.0108  pre0_mod0_post0
+# 2 rsq     standard   0.0116     5 0.00110 pre0_mod0_post0
+
+
+# Evaluate using spatiotemporal block CV
+cv_results_lbto <- fit_resamples(wflow, resamples = rset_lbto)
+collect_metrics(cv_results_lbto)
+
+# # A tibble: 2 × 6
+#   .metric .estimator  mean     n std_err .config        
+#   <chr>   <chr>      <dbl> <int>   <dbl> <chr>          
+# 1 rmse    standard   5.53      6 1.28    pre0_mod0_post0
+# 2 rsq     standard   0.303     6 0.00171 pre0_mod0_post0
+
+# Evaluate using spatiotemporal block CV
+cv_results_lblto <- fit_resamples(wflow, resamples = rset_lblto)
+collect_metrics(cv_results_lblto)
+
+# # A tibble: 2 × 6
+#   .metric .estimator  mean     n std_err .config        
+#   <chr>   <chr>      <dbl> <int>   <dbl> <chr>          
+# 1 rmse    standard   5.02     20 0.540   pre0_mod0_post0
+# 2 rsq     standard   0.155    20 0.00665 pre0_mod0_post0
 ```

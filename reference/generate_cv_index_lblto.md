@@ -13,7 +13,7 @@ generate_cv_index_lblto(covars, sp_fold, t_fold, blocks, block_id = NULL)
 
 - covars:
 
-  stdt. See
+  data.frame-like object with `lon`, `lat`, and `time` columns. See
   [`prep_input`](https://sigmafelix.github.io/stcvlite/reference/prep_input.md)
   for details.
 
