@@ -117,12 +117,24 @@
       }
     x <- as.matrix(sp_subset)
     storage.mode(x) <- "double"
+    n_pts <- nrow(x)
+
+    # Too few distinct locations for a neighbor-distance search
+    # (e.g. a handful of unique stations) -- everything is one cluster.
+    if (n_pts <= 1L) {
+      data$sp_index <- rep(1L, nrow(data))
+      attr(data, "dbscan_eps") <- NA_real_
+      attr(data, "dbscan_minPts") <- NA_integer_
+      return(data)
+    }
 
     if (is.null(minPts)) {
-      minPts <- max(4L, floor(log(nrow(x))))
+      minPts <- max(4L, floor(log(n_pts)))
     }
     minPts <- as.integer(minPts)
+    minPts <- max(1L, min(minPts, n_pts - 1L))
     k <- max(2L, minPts - 1L)
+    k <- max(1L, min(k, n_pts - 1L))
 
     kd <- FNN::knn.dist(x, k = k)
     kd_last <- sort(kd[, k], na.last = NA)

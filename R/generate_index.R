@@ -1,5 +1,6 @@
 #' Generate spatio-temporal cross-validation index
-#' @param covars stdt. See [prep_input()] for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()] for details.
 #' @param cv_mode character(1). One of `"lolo"` (leave-one-location-out),
 #' `"loto"` (leave-one-time-out),
 #' `"lolto"` (leave-one-location-time-out),
@@ -40,7 +41,7 @@
 #' lbto <- generate_cv_index(spdat, cv_mode = "lbto", cv_fold = 5)
 #' lblto <- generate_cv_index(spdat, cv_mode = "lblto", sp_fold = 5, t_fold = 4)
 #' random <- generate_cv_index(spdat, cv_mode = "random", cv_fold = 5)
-#' plot_cv_folds(spdat$stdt, lblto)
+#' plot_cv_folds(spdat, lblto)
 #' @export
 generate_cv_index <- function(
     covars,
@@ -51,9 +52,9 @@ generate_cv_index <- function(
     blocks = NULL,
     block_id = NULL) {
   # type check
-  if (!any("stdt" %in% class(covars))) {
-    stop("Only stdt object is acceptable. Please consider
-    using prep_input.")
+  if (!is.data.frame(covars) || !all(c("lon", "lat", "time") %in% names(covars))) {
+    stop("`covars` must be a data.frame-like object with 'lon', 'lat',
+    and 'time' columns. Please consider using prep_input().")
   }
   cv_mode <- match.arg(cv_mode)
   # no block check
@@ -90,7 +91,8 @@ generate_cv_index <- function(
 
 
 #' Generate unique spatiotemporal identifier from stdt object
-#' @param covars stdt. See [prep_input()]
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()]
 #' @param mode One of `"spatial"` or `"spatiotemporal"`
 #' @description It generates unique spatiotemporal identifier in the
 #' input stdt object. Regardless of mode values
@@ -104,44 +106,67 @@ generate_spt_index <- function(
     mode = c("spatial", "spatiotemporal")) {
   mode <- match.arg(mode)
   # generate unique sp_index
-  covar_dt <- covars$stdt
-
-  if ("sp_index" %in% colnames(covar_dt)) {
+  if ("sp_index" %in% colnames(covars)) {
     return(covars)
   }
-  covar_dt[["sp_index"]] <-
-    paste0(covar_dt[["lon"]], "_", covar_dt[["lat"]])
+  covars[["sp_index"]] <-
+    paste0(covars[["lon"]], "_", covars[["lat"]])
 
   if (mode == "spatiotemporal") {
-    covar_dt[["sp_index"]] <-
-      paste0(covar_dt[["sp_index"]], "_", covar_dt[["time"]])
+    covars[["sp_index"]] <-
+      paste0(covars[["sp_index"]], "_", covars[["time"]])
   }
 
-  covars$stdt <- covar_dt
   return(covars)
+}
+
+
+#' Broadcast a per-location `sp_index` onto every row of `covars`
+#' @param covars data.frame-like object with `lon`/`lat` columns (one row
+#' per observation; locations may repeat).
+#' @param locs data.frame-like object with unique `lon`/`lat` pairs and a
+#' `sp_index` column, as produced by clustering/joining on deduplicated
+#' locations.
+#' @details Matching is by exact `lon`/`lat` equality, which is correct
+#' whenever coordinates are literal repeated copies (e.g. joined once per
+#' site and broadcast across rows), keeping the assignment invariant to how
+#' many times each location was observed.
+#' @return `covars` with a `sp_index` column added, in the original row order.
+#' @noRd
+.join_sp_index_by_location <- function(covars, locs) {
+  key_covars <- paste(covars[["lon"]], covars[["lat"]], sep = "_")
+  key_locs <- paste(locs[["lon"]], locs[["lat"]], sep = "_")
+  covars[["sp_index"]] <- locs[["sp_index"]][match(key_covars, key_locs)]
+  covars
 }
 
 
 # nolint start
 #' Generate blocked spatial index
-#' @param covars stdt.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time` columns.
 #' @param cv_fold integer(1). Number of folds for cross-validation.
 #' @param blocks numeric(2)/sf/SpatVector configuration of blocks.
 #' @param block_id character(1). The unique identifier of each block.
 #' @details "Block" in this function refers to a group of contiguous spatial/temporal entities.
 #' Regardless of `mode` value (should be one of `"spatial"` or `"spatiotemporal"`),
 #' the index column will be named "sp_index". \code{block_id} should be set with a proper field name
-#' when blocks is a sf or SpatVector object. When \code{cv_fold} is an integer, then the coordinates stored in \code{stdt} object are clustered with k-means. In this case, the result object will include attributes (accessible with \code{attr} function) about
-#' "kmeans_centers" (coordinates of centers) and "kmeans_sizes" (size of each cluster)
-#' @return stdt
+#' when blocks is a sf or SpatVector object. When \code{cv_fold} is an integer, then the *unique*
+#' `lon`/`lat` coordinates in \code{covars} are clustered (not every row), so the result is
+#' unaffected by how many times each location was observed — this keeps the block
+#' assignment correct for irregular/unbalanced spacetime panels. Location matching when
+#' broadcasting the cluster/block id back onto \code{covars} is by exact `lon`/`lat` equality;
+#' coordinates that jitter slightly across repeated observations of "the same" site should be
+#' rounded/snapped beforehand. When \code{cv_fold} is an integer, the result object will include
+#' attributes (accessible with \code{attr} function) about "dbscan_eps" and "dbscan_minPts".
+#' @return data.frame-like object (same class as \code{covars}) with a `sp_index` column
 #' @author Insang Song
 #' @examples
 #' data(spdat)
 #' covars <- spdat
 #' covars_block <- generate_block_sp_index(covars, cv_fold = 5)
-#' covars_block$stdt
+#' covars_block
 #'
-#' plot_cv_folds(covars_block$stdt, covars_block$stdt$sp_index)
+#' plot_cv_folds(covars_block, covars_block$sp_index)
 #' @importFrom methods is
 #' @importFrom sf st_join
 #' @importFrom terra intersect
@@ -157,13 +182,18 @@ generate_block_sp_index <- function(
   detected_class <- class(blocks)[1]
 
   if (!is.null(cv_fold)) {
-    covars$stdt <-
-      .assign_spindex(
-        covars$stdt,
-        sp_cols = c("lon", "lat"),
-        nclusters = cv_fold,
-        engine = "dbscan"
-      )
+    locs <- unique(data.table::data.table(lon = covars[["lon"]], lat = covars[["lat"]]))
+    locs <- .assign_spindex(
+      locs,
+      sp_cols = c("lon", "lat"),
+      nclusters = cv_fold,
+      engine = "dbscan"
+    )
+    covars <- .join_sp_index_by_location(covars, locs)
+    if (!is.null(attr(locs, "dbscan_eps"))) {
+      attr(covars, "dbscan_eps") <- attr(locs, "dbscan_eps")
+      attr(covars, "dbscan_minPts") <- attr(locs, "dbscan_minPts")
+    }
   }
 
   if (inherits(blocks, "sf") ||
@@ -184,19 +214,22 @@ generate_block_sp_index <- function(
       SpatVector = terra::intersect
     )
 
-    covars_recov <- from_stdt(covars, to = detected_class)
-    covars_recov_id <- fun_stjoin(covars_recov, blocks[, block_id])
-    covars$stdt[["sp_index"]] <- unlist(covars_recov_id[[block_id]])
+    locs <- unique(data.table::data.table(lon = covars[["lon"]], lat = covars[["lat"]]))
+    attr(locs, "crs") <- attr(covars, "crs")
+    locs_recov <- from_stdt(locs, to = detected_class)
+    locs_recov_id <- fun_stjoin(locs_recov, blocks[, block_id])
+    locs[["sp_index"]] <- unlist(locs_recov_id[[block_id]])
+    covars <- .join_sp_index_by_location(covars, locs)
   }
 
   if (is.numeric(blocks)) {
     step_lon <- blocks[1]
     step_lat <- blocks[2]
 
-    covars_recov_id <- data.table::copy(covars$stdt)
+    locs <- unique(data.table::data.table(lon = covars[["lon"]], lat = covars[["lat"]]))
 
-    vlon <- unlist(covars_recov_id[["lon"]])
-    vlat <- unlist(covars_recov_id[["lat"]])
+    vlon <- locs[["lon"]]
+    vlat <- locs[["lat"]]
     vlon_cuts <- seq(min(vlon), max(vlon), step_lon)
     vlat_cuts <- seq(min(vlat), max(vlat), step_lat)
 
@@ -209,8 +242,8 @@ generate_block_sp_index <- function(
       as.character(y_range),
       sep = "|"
     )
-    xy_range_num <- as.numeric(factor(xy_range))
-    covars$stdt[["sp_index"]] <- xy_range_num
+    locs[["sp_index"]] <- as.numeric(factor(xy_range))
+    covars <- .join_sp_index_by_location(covars, locs)
   }
 
   return(covars)
@@ -219,21 +252,23 @@ generate_block_sp_index <- function(
 
 
 #' Generate spatio-temporal cross-validation index (leave-one-time-out)
-#' @param covars stdt. See [prep_input()] for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()] for details.
 #' @author Insang Song
 #' @return An integer vector.
 #' @export
 generate_cv_index_loto <-
   function(
       covars) {
-    origin_ts <- covars$stdt$time
+    origin_ts <- covars$time
     sorted_ts <- sort(unique(origin_ts))
     cv_index <- as.numeric(factor(origin_ts, levels = sorted_ts))
     return(cv_index)
   }
 
 #' Generate spatio-temporal cross-validation index (leave-one-location-out)
-#' @param covars stdt. See [prep_input()] for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()] for details.
 #' @author Insang Song
 #' @return An integer vector.
 #' @export
@@ -242,7 +277,7 @@ generate_cv_index_lolo <-
     covars
   ) {
     covars_sp_index <- generate_spt_index(covars, mode = "spatial")
-    sp_index_origin <- unlist(covars_sp_index$stdt[["sp_index"]])
+    sp_index_origin <- unlist(covars_sp_index[["sp_index"]])
     sp_index_unique <- sort(unique(sp_index_origin))
     cv_index <- as.numeric(factor(sp_index_origin, levels = sp_index_unique))
     return(cv_index)
@@ -250,7 +285,8 @@ generate_cv_index_lolo <-
 
 
 #' Generate spatio-temporal cross-validation index leave-one-location-time-out)
-#' @param covars stdt. See [prep_input()] for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()] for details.
 #' @author Insang Song
 #' @return An integer vector.
 #' @export
@@ -258,7 +294,7 @@ generate_cv_index_lolto <-
   function(
       covars
     ) {
-    rows <- nrow(covars$stdt)
+    rows <- nrow(covars)
     cv_index <- seq(1, rows)
     return(cv_index)
   }
@@ -266,7 +302,8 @@ generate_cv_index_lolto <-
 
 # nolint start
 #' Generate spatio-temporal cross-validation index (leave-block-location-out)
-#' @param covars stdt. See [prep_input()] for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()] for details.
 #' @param cv_fold integer(1). Number of folds for cross-validation.
 #' @param blocks integer(2)/sf/SpatVector object.
 #' @param block_id character(1). The unique identifier of each block.
@@ -290,7 +327,7 @@ generate_cv_index_lblo <-
       cv_fold = cv_fold, blocks, block_id
     )
 
-    cv_index <- covars_sp_index$stdt$sp_index
+    cv_index <- covars_sp_index$sp_index
 
     # if cv_index is character (when block vector is entered)
     # convert cv_index to factor
@@ -302,7 +339,8 @@ generate_cv_index_lblo <-
 
 # nolint start
 #' Generate spatio-temporal cross-validation index (leave-block-time-out)
-#' @param covars stdt. See [prep_input()] for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()] for details.
 #' @param cv_fold integer(1). Number of folds for cross-validation.
 #' @author Insang Song
 #' @return An integer vector.
@@ -315,7 +353,7 @@ generate_cv_index_lbto <- function(
     stop("Argument cv_fold cannot be NULL. Please set a proper number.\n")
   }
 
-  origin_ts <- covars$stdt$time
+  origin_ts <- covars$time
   origin_ts_min <- min(origin_ts)
   origin_ts_diff <- as.integer(origin_ts - origin_ts_min)
 
@@ -342,7 +380,8 @@ generate_cv_index_lbto <- function(
 
 # nolint start
 #' Generate spatio-temporal cross-validation index (leave-block-location-time-out)
-#' @param covars stdt. See \code{\link{prep_input}} for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See \code{\link{prep_input}} for details.
 #' @param sp_fold integer(1). Number of subfolds for spatial blocks.
 #' @param t_fold integer(1). Number of subfolds for temporal blocks.
 #' @param blocks integer(2)/sf/SpatVector object.
@@ -368,7 +407,7 @@ generate_cv_index_lblto <- function(
   )
   spt_index <- sprintf(
     "S%04d-T%04d",
-    covars_sp_index$stdt$sp_index, ts_index
+    covars_sp_index$sp_index, ts_index
   )
   cv_index <- as.numeric(factor(spt_index))
   return(cv_index)
@@ -376,7 +415,8 @@ generate_cv_index_lblto <- function(
 
 
 #' Generate spatio-temporal cross-validation index (random)
-#' @param covars stdt. See [prep_input()] for details.
+#' @param covars data.frame-like object with `lon`, `lat`, and `time`
+#' columns. See [prep_input()] for details.
 #' @param cv_fold integer(1). Number of folds for cross-validation.
 #' @author Insang Song
 #' @return An integer vector with unique values of \code{seq(1, cv_fold)}
@@ -387,7 +427,7 @@ generate_cv_index_random <- function(
   if (is.null(cv_fold)) {
     stop("Argument cv_fold cannot be NULL. Please set a proper number.\n")
   }
-  rows <- nrow(covars$stdt)
+  rows <- nrow(covars)
   cv_index <- sample(seq(1, cv_fold), rows, replace = TRUE)
   return(cv_index)
 }

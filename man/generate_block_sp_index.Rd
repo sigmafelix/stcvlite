@@ -7,7 +7,7 @@
 generate_block_sp_index(covars, cv_fold = NULL, blocks = NULL, block_id = NULL)
 }
 \arguments{
-\item{covars}{stdt.}
+\item{covars}{data.frame-like object with \code{lon}, \code{lat}, and \code{time} columns.}
 
 \item{cv_fold}{integer(1). Number of folds for cross-validation.}
 
@@ -16,7 +16,7 @@ generate_block_sp_index(covars, cv_fold = NULL, blocks = NULL, block_id = NULL)
 \item{block_id}{character(1). The unique identifier of each block.}
 }
 \value{
-stdt
+data.frame-like object (same class as \code{covars}) with a \code{sp_index} column
 }
 \description{
 Generate blocked spatial index
@@ -25,16 +25,22 @@ Generate blocked spatial index
 "Block" in this function refers to a group of contiguous spatial/temporal entities.
 Regardless of \code{mode} value (should be one of \code{"spatial"} or \code{"spatiotemporal"}),
 the index column will be named "sp_index". \code{block_id} should be set with a proper field name
-when blocks is a sf or SpatVector object. When \code{cv_fold} is an integer, then the coordinates stored in \code{stdt} object are clustered with k-means. In this case, the result object will include attributes (accessible with \code{attr} function) about
-"kmeans_centers" (coordinates of centers) and "kmeans_sizes" (size of each cluster)
+when blocks is a sf or SpatVector object. When \code{cv_fold} is an integer, then the \emph{unique}
+\code{lon}/\code{lat} coordinates in \code{covars} are clustered (not every row), so the result is
+unaffected by how many times each location was observed — this keeps the block
+assignment correct for irregular/unbalanced spacetime panels. Location matching when
+broadcasting the cluster/block id back onto \code{covars} is by exact \code{lon}/\code{lat} equality;
+coordinates that jitter slightly across repeated observations of "the same" site should be
+rounded/snapped beforehand. When \code{cv_fold} is an integer, the result object will include
+attributes (accessible with \code{attr} function) about "dbscan_eps" and "dbscan_minPts".
 }
 \examples{
 data(spdat)
 covars <- spdat
 covars_block <- generate_block_sp_index(covars, cv_fold = 5)
-covars_block$stdt
+covars_block
 
-plot_cv_folds(covars_block$stdt, covars_block$stdt$sp_index)
+plot_cv_folds(covars_block, covars_block$sp_index)
 }
 \author{
 Insang Song

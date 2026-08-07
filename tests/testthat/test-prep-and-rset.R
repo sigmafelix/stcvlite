@@ -31,7 +31,7 @@ testthat::test_that("convert_cv_index_rset builds an rset with expected split co
 
   out <- stcvlite::convert_cv_index_rset(
     cvindex = cvindex,
-    data = covars$stdt,
+    data = covars,
     cv_mode = "lolo"
   )
 
