@@ -12,7 +12,8 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
-  fig.height = 5
+  fig.height = 5,
+  eval = FALSE
 )
 
 has_deps <- requireNamespace("gstat", quietly = TRUE) &&
@@ -21,16 +22,10 @@ has_deps <- requireNamespace("gstat", quietly = TRUE) &&
   requireNamespace("torch", quietly = TRUE) &&
   requireNamespace("rsample", quietly = TRUE)
 
-knitr::opts_chunk$set(eval = has_deps)
 ```
 
-```{r, echo = FALSE, eval = !has_deps, results = "asis"}
-message(
-  "This vignette needs the **gstat**, **spacetime**, **sf**, **torch**,",
-  "and **rsample** packages, which are not all installed.",
-  "Install them to render the full vignette."
-)
-```
+## Note
+Please note that this vignette is intended for demonstration with CUDA-enabled GPUs. The vignette is intentionally not run to avoid long build times and continuous integration issues.
 
 ## Introduction
 
