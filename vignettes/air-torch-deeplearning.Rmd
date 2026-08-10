@@ -57,7 +57,7 @@ station's prediction draw on its geographic neighbors' features directly,
 which is a more natural match for `stcvlite`'s station-coordinate CV
 schemes (`lolo`, `lblo`, ...) than treating every row as independent.
 
-```{r setup}
+```{r setup, eval = FALSE}
 library(stcvlite)
 library(data.table)
 library(sf)
@@ -82,7 +82,7 @@ device
 Flatten `DE_RB_2005`, reproject the station coordinates to lon/lat, and
 add day-of-year harmonics -- identical to the companion vignette.
 
-```{r load-air}
+```{r load-air, eval = FALSE}
 data("DE_RB_2005", package = "gstat")
 
 air_raw <- as.data.frame(DE_RB_2005)
@@ -120,7 +120,7 @@ target_col <- "PM10"
 nrow(air_dt)
 ```
 
-```{r prep}
+```{r prep, eval = FALSE}
 air_sf <- sf::st_as_sf(air_dt, coords = c("lon", "lat"), crs = 4326, remove = FALSE)
 air_prepped <- suppressWarnings(stcvlite::prep_input(air_sf))
 ```
@@ -134,7 +134,7 @@ both combined. Unlike the companion vignette, we skip `lolo`/`loto`/
 or 365 full network retrainings, and unlike xgboost/BART, retraining a
 network is not cheap enough to do that many times in a vignette.
 
-```{r cv-indices}
+```{r cv-indices, eval = FALSE}
 cv_indices <- list(
   random = generate_cv_index(air_prepped, cv_mode = "random", cv_fold = 5),
   lblo   = generate_cv_index(air_prepped, cv_mode = "lblo", cv_fold = 6),
@@ -159,7 +159,7 @@ benefits from centering too. Fitting the scaler on the *analysis*
 *assessment* (test) set -- keeps test-fold information out of training,
 exactly as a model itself must never see assessment rows.
 
-```{r scale-helper}
+```{r scale-helper, eval = FALSE}
 scale_with <- function(x, center, scale) {
   scale <- ifelse(scale == 0, 1, scale)
   sweep(sweep(x, 2, center, "-"), 2, scale, "/")
@@ -194,7 +194,7 @@ A small two-hidden-layer MLP is enough for five numeric features. `torch`
 models are declared with `nn_module()`: `initialize()` creates the
 layers, `forward()` wires them together.
 
-```{r model-def}
+```{r model-def, eval = FALSE}
 pm10_net <- torch::nn_module(
   classname = "pm10_net",
   initialize = function(n_features, hidden = c(16, 8), dropout = 0.1) {
@@ -222,7 +222,7 @@ off, which matters below.
 A `torch::dataset` wraps the scaled matrices so `dataloader()` can
 shuffle and batch them for us:
 
-```{r dataset-def}
+```{r dataset-def, eval = FALSE}
 pm10_dataset <- torch::dataset(
   name = "pm10_dataset",
   initialize = function(x, y) {
@@ -252,7 +252,7 @@ reasonable match for the smaller network (`hidden = c(16, 8)`) defined
 above -- there is less point training a wider net on a subsample too
 small to need that much capacity.
 
-```{r train-helper}
+```{r train-helper, eval = FALSE}
 fit_predict_torch <- function(train, test, feature_cols, target_col,
                                epochs = 15, batch_size = 512, lr = 1e-3,
                                max_train = 4000) {
@@ -304,7 +304,7 @@ scratch on every fold's analysis set (a fresh `pm10_net()` each call, so
 no weights leak across folds), score only on that fold's assessment set,
 and record both RMSE and MAE.
 
-```{r evaluate-helper}
+```{r evaluate-helper, eval = FALSE}
 rmse <- function(actual, pred) sqrt(mean((actual - pred)^2))
 mae <- function(actual, pred) mean(abs(actual - pred))
 
@@ -343,7 +343,7 @@ extra minutes of build time. Section 12 revisits mini-batch granularity
 for the graph model, where the relevant batch unit is a *day*, not a
 row, and no subsampling is needed to stay fast.
 
-```{r run-eval}
+```{r run-eval, eval = FALSE}
 results <- rbindlist(Map(evaluate_rset_torch, rset_list, names(rset_list)))
 
 summary_tbl <- results[, .(
@@ -355,7 +355,7 @@ summary_tbl <- results[, .(
 knitr::kable(summary_tbl[order(cv_mode)], digits = 2)
 ```
 
-```{r summary-plot, eval = has_deps && requireNamespace("plotly", quietly = TRUE)}
+```{r summary-plot, eval = FALSE}
 plotly::plot_ly(
   data = results,
   x = ~cv_mode, y = ~rmse,
@@ -377,7 +377,7 @@ numbers above, and as a template for spotting an under- or over-fit fold
 too low; one that is flat from the start usually means `lr` is too low
 or too high).
 
-```{r loss-curve}
+```{r loss-curve, eval = FALSE}
 split1 <- rset_list$lblo$splits[[1]]
 train1 <- as.data.table(rsample::analysis(split1))
 test1 <- as.data.table(rsample::assessment(split1))
@@ -440,7 +440,7 @@ neighbor, we keep the A-B edge even if B's own `k` nearest happen not to
 include A -- and store a **row-normalized** adjacency matrix, so each
 node's graph-convolution input is the *mean* of its neighbors' features.
 
-```{r graph-build}
+```{r graph-build, eval = FALSE}
 station_lookup <- unique(air_dt[, .(station_id, lon, lat, station_altitude)])
 setorder(station_lookup, station_id)
 station_lookup[, station_idx := .I]
@@ -479,7 +479,7 @@ one row per station in a fixed order -- so we reshape the data into a
 every day (54-68 of the 69 report on any given day), so we track which
 `(day, station)` cells are actually observed with a boolean mask.
 
-```{r panel-build}
+```{r panel-build, eval = FALSE}
 day_lookup <- data.table(time = sort(unique(air_dt$time)))
 day_lookup[, day_idx := .I]
 day_lookup[, doy := as.integer(format(time, "%j"))]
@@ -502,7 +502,7 @@ only reshapes rows we already had. Only the *target* (`PM10`) and the
 *fold assignment* are actually missing outside the observed cells, and
 both are masked out below rather than filled in.
 
-```{r feature-array}
+```{r feature-array, eval = FALSE}
 station_feat <- scale(as.matrix(station_lookup[order(station_idx), .(lon, lat, station_altitude)]))
 day_feat <- as.matrix(day_lookup[order(day_idx), .(doy_sin, doy_cos)])
 
@@ -516,7 +516,7 @@ x_full <- torch::torch_cat(list(x_station_b, x_day_b), dim = 3)
 x_full$shape
 ```
 
-```{r mask-build}
+```{r mask-build, eval = FALSE}
 y_full <- matrix(0, n_days, n_stations)
 obs_mask <- matrix(FALSE, n_days, n_stations)
 idx_mat <- as.matrix(air_panel[, .(day_idx, station_idx)])
@@ -543,7 +543,7 @@ Each layer computes two linear transforms -- one of the node's own
 features, one of its neighbors' mean features -- and adds them, rather
 than mixing both under one shared weight matrix:
 
-```{r sage-model}
+```{r sage-model, eval = FALSE}
 sage_layer <- torch::nn_module(
   classname = "sage_layer",
   initialize = function(in_features, out_features, a_norm) {
@@ -598,7 +598,7 @@ assigns to the analysis set. Days that belong entirely to the assessment
 set for a given fold (e.g. every day in a held-out `lbto` block) are
 skipped during training and used only for scoring.
 
-```{r gcn-train-helper}
+```{r gcn-train-helper, eval = FALSE}
 masked_mse <- function(pred, target, mask) {
   ((pred - target)^2 * mask)$sum() / mask$sum()
 }
@@ -680,7 +680,7 @@ evaluate_gcn <- function(cv_mode, epochs = 80) {
 }
 ```
 
-```{r gcn-run-eval}
+```{r gcn-run-eval, eval = FALSE}
 results_gcn <- rbindlist(lapply(names(cv_indices), evaluate_gcn))
 
 summary_gcn <- results_gcn[, .(
@@ -705,7 +705,7 @@ scales with the number of *days*, not the number of station-day *rows*.
 
 ## 13. MLP vs. GCN, side by side
 
-```{r mlp-vs-gcn}
+```{r mlp-vs-gcn, eval = FALSE}
 comparison <- rbindlist(list(
   results[, .(cv_mode, rmse, mae, model = "mlp")],
   results_gcn[, .(cv_mode, rmse, mae, model = "gcn")]
@@ -718,7 +718,7 @@ knitr::kable(
 )
 ```
 
-```{r mlp-vs-gcn-plot, eval = has_deps && requireNamespace("plotly", quietly = TRUE)}
+```{r mlp-vs-gcn-plot, eval = FALSE}
 plotly::plot_ly(
   data = comparison,
   x = ~cv_mode, y = ~rmse, color = ~model,
