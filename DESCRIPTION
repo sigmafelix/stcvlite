@@ -1,6 +1,6 @@
 Package: stcvlite
 Title: Lightweight rsample extension for spatiotemporal cross-validation
-Version: 0.3.0.9000
+Version: 0.3.1.9000
 Authors@R:
   person("Insang", "Song", , "geoissong@gmail.com", role = c("aut", "cre"),
           comment = c(ORCID = "0000-0001-8732-3256"))
@@ -23,7 +23,8 @@ Suggests:
   gstat,
   spacetime,
   xgboost,
-  dbarts
+  dbarts,
+  torch
 VignetteBuilder: knitr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
