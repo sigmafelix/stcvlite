@@ -26,7 +26,7 @@ knitr::opts_chunk$set(eval = has_deps)
 ```
 
 ```{r, echo = FALSE, eval = !has_deps, results = "asis"}
-cat(
+message(
   "This vignette needs the **gstat**, **spacetime**, **sf**, **xgboost**,",
   "**dbarts**, and **rsample** packages, which are not all installed.",
   "Install them to render the full vignette."
@@ -81,7 +81,6 @@ elevation.
 
 ```{r load-air}
 data("DE_RB_2005", package = "gstat")
-DE_RB_2005
 ```
 
 We flatten it to a long table with `as.data.frame()`, drop missing
