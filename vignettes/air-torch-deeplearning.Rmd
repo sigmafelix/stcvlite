@@ -331,7 +331,7 @@ evaluate_rset_torch <- function(rset, cv_mode, epochs = 15) {
 
 ## 6. Running the four schemes
 
-This refits the network `r sum(sapply(rset_list, nrow))` times in total
+This refits the network `sum(sapply(rset_list, nrow))` times in total
 (5 + 6 + 6 + 6 folds). Each fit trains on at most `max_train = 4000`
 subsampled rows for 15 epochs in mini-batches of 512, which keeps this
 section under two minutes on a laptop CPU. That is a real
@@ -698,7 +698,7 @@ capping training rows at `max_train = 4000` per fold to keep Section 6
 fast, the GCN's mini-batches -- individual *days*, at most 365 of them,
 each one a single matrix multiply against a 69x69 adjacency shared
 across the whole dataset -- need no such subsampling to run quickly.
-Refitting all `r sum(sapply(cv_indices, max))` folds across all four
+Refitting all `sum(sapply(cv_indices, max))` folds across all four
 schemes here takes well under a minute despite using more than five
 times the epoch count (80 vs. 15), because the number of gradient steps
 scales with the number of *days*, not the number of station-day *rows*.
