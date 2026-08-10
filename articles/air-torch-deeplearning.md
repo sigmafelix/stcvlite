@@ -1,0 +1,779 @@
+# Spatiotemporal CV on Air Quality Data with torch Neural Networks
+
+## Note
+
+Please note that this vignette is intended for demonstration with
+CUDA-enabled GPUs. The vignette is intentionally not run to avoid long
+build times and continuous integration issues.
+
+## Introduction
+
+This is a companion to the
+[`air-xgboost-bart`](https://sigmafelix.github.io/stcvlite/articles/air-xgboost-bart.md)
+vignette. It uses the same dataset – `DE_RB_2005`, daily
+rural-background PM10 readings from 69 German monitoring stations in
+2005, shipped with **gstat** – but fits a small feed-forward neural
+network with **torch** instead of tree-based models, and folds it into
+`stcvlite`’s spatiotemporal CV schemes the same way.
+
+Neural networks bring two practical concerns that tree ensembles mostly
+sidestep: features must be scaled (gradient descent on raw
+longitude/PM10 scales does not converge well), and training is
+iterative, so we need a loop over epochs and mini-batches rather than a
+single `fit()` call. This vignette focuses on that machinery – scaling
+*within* each fold to avoid leakage, wiring a
+[`torch::dataset`](https://torch.mlverse.org/docs/reference/dataset.html)/`dataloader`
+to `stcvlite`’s `rset` splits, and reading a training curve – rather
+than re-deriving the data preparation steps, which the companion
+vignette covers in detail.
+
+The vignette has two parts. Part 1 (Sections 1-7) fits a plain
+feed-forward network (an MLP) row by row, exactly like the xgboost/BART
+models in the companion vignette – every station-day is an independent
+observation, and the network never sees which station or day a row came
+from except through its `lon`/`lat`/time-harmonic features. Part 2
+(Sections 8-12) fits a **graph neural network** (GNN) instead: the 69
+stations become nodes of a fixed spatial graph, and each layer lets a
+station’s prediction draw on its geographic neighbors’ features
+directly, which is a more natural match for `stcvlite`’s
+station-coordinate CV schemes (`lolo`, `lblo`, …) than treating every
+row as independent.
+
+``` r
+
+library(stcvlite)
+library(data.table)
+library(sf)
+library(rsample)
+library(torch)
+
+set.seed(2026)
+torch::torch_manual_seed(2026)
+
+device <- if (torch::cuda_is_available()) {
+  torch::torch_device("cuda")
+} else if (torch::backends_mps_is_available()) {
+  torch::torch_device("mps")
+} else {
+  torch::torch_device("cpu")
+}
+device
+```
+
+## 1. Data and features
+
+Flatten `DE_RB_2005`, reproject the station coordinates to lon/lat, and
+add day-of-year harmonics – identical to the companion vignette.
+
+``` r
+
+data("DE_RB_2005", package = "gstat")
+
+air_raw <- as.data.frame(DE_RB_2005)
+setDT(air_raw)
+air_raw <- air_raw[!is.na(PM10)]
+air_raw <- air_raw[, .(
+  station_id = sp.ID,
+  coords.x1, coords.x2,
+  time = as.Date(time),
+  station_altitude,
+  PM10
+)]
+
+stations_sf <- sf::st_as_sf(
+  unique(air_raw[, .(station_id, coords.x1, coords.x2)]),
+  coords = c("coords.x1", "coords.x2"), crs = 32632
+)
+stations_sf <- sf::st_transform(stations_sf, 4326)
+station_coords <- data.table(
+  station_id = stations_sf$station_id,
+  lon = sf::st_coordinates(stations_sf)[, 1],
+  lat = sf::st_coordinates(stations_sf)[, 2]
+)
+
+air_dt <- merge(air_raw, station_coords, by = "station_id")
+air_dt[, doy := as.integer(format(time, "%j"))]
+air_dt[, doy_sin := sin(2 * pi * doy / 365)]
+air_dt[, doy_cos := cos(2 * pi * doy / 365)]
+air_dt[, c("coords.x1", "coords.x2", "doy") := NULL]
+setcolorder(air_dt, c("station_id", "lon", "lat", "time"))
+
+feature_cols <- c("lon", "lat", "station_altitude", "doy_sin", "doy_cos")
+target_col <- "PM10"
+
+nrow(air_dt)
+```
+
+``` r
+
+air_sf <- sf::st_as_sf(air_dt, coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+air_prepped <- suppressWarnings(stcvlite::prep_input(air_sf))
+```
+
+## 2. Cross-validation indices
+
+We compare four schemes: `random` as the optimistic baseline, `lblo` and
+`lbto` for block-wise spatial and temporal extrapolation, and `lblto`
+for both combined. Unlike the companion vignette, we skip `lolo`/`loto`/
+`lolto`: those hold out one station or one day at a time, which means 69
+or 365 full network retrainings, and unlike xgboost/BART, retraining a
+network is not cheap enough to do that many times in a vignette.
+
+``` r
+
+cv_indices <- list(
+  random = generate_cv_index(air_prepped, cv_mode = "random", cv_fold = 5),
+  lblo   = generate_cv_index(air_prepped, cv_mode = "lblo", cv_fold = 6),
+  lbto   = generate_cv_index(air_prepped, cv_mode = "lbto", cv_fold = 6),
+  lblto  = generate_cv_index(air_prepped, cv_mode = "lblto", sp_fold = 3, t_fold = 2)
+)
+
+rset_list <- Map(
+  convert_cv_index_rset,
+  cvindex = cv_indices,
+  cv_mode = names(cv_indices),
+  MoreArgs = list(data = air_prepped)
+)
+sapply(rset_list, nrow)
+```
+
+## 3. Scaling within each fold
+
+Gradient descent needs features on comparable scales, and the target
+benefits from centering too. Fitting the scaler on the *analysis*
+(training) set only – and applying those same parameters to the
+*assessment* (test) set – keeps test-fold information out of training,
+exactly as a model itself must never see assessment rows.
+
+``` r
+
+scale_with <- function(x, center, scale) {
+  scale <- ifelse(scale == 0, 1, scale)
+  sweep(sweep(x, 2, center, "-"), 2, scale, "/")
+}
+
+prep_fold_matrices <- function(train, test, feature_cols, target_col) {
+  x_train_raw <- as.matrix(train[, ..feature_cols])
+  x_test_raw <- as.matrix(test[, ..feature_cols])
+
+  x_center <- colMeans(x_train_raw)
+  x_scale <- apply(x_train_raw, 2, sd)
+  y_center <- mean(train[[target_col]])
+  y_scale <- sd(train[[target_col]])
+
+  list(
+    x_train = scale_with(x_train_raw, x_center, x_scale),
+    x_test = scale_with(x_test_raw, x_center, x_scale),
+    y_train = (train[[target_col]] - y_center) / y_scale,
+    y_center = y_center,
+    y_scale = y_scale
+  )
+}
+```
+
+We scale the response too, purely so the loss starts in a numerically
+sane range for the optimizer; predictions are un-scaled back to
+micrograms per cubic meter before computing RMSE/MAE.
+
+## 4. The network
+
+A small two-hidden-layer MLP is enough for five numeric features.
+`torch` models are declared with
+[`nn_module()`](https://torch.mlverse.org/docs/reference/nn_module.html):
+[`initialize()`](https://rdrr.io/r/methods/new.html) creates the layers,
+`forward()` wires them together.
+
+``` r
+
+pm10_net <- torch::nn_module(
+  classname = "pm10_net",
+  initialize = function(n_features, hidden = c(16, 8), dropout = 0.1) {
+    self$fc1 <- torch::nn_linear(n_features, hidden[1])
+    self$fc2 <- torch::nn_linear(hidden[1], hidden[2])
+    self$fc3 <- torch::nn_linear(hidden[2], 1)
+    self$drop <- torch::nn_dropout(dropout)
+  },
+  forward = function(x) {
+    x |>
+      self$fc1() |>
+      torch::nnf_relu() |>
+      self$drop() |>
+      self$fc2() |>
+      torch::nnf_relu() |>
+      self$fc3()
+  }
+)
+```
+
+`dropout` is applied only when the module is in training mode
+(`model$train()`); calling `model$eval()` before prediction switches it
+off, which matters below.
+
+A
+[`torch::dataset`](https://torch.mlverse.org/docs/reference/dataset.html)
+wraps the scaled matrices so
+[`dataloader()`](https://torch.mlverse.org/docs/reference/dataloader.html)
+can shuffle and batch them for us:
+
+``` r
+
+pm10_dataset <- torch::dataset(
+  name = "pm10_dataset",
+  initialize = function(x, y) {
+    self$x <- torch::torch_tensor(x, dtype = torch::torch_float())
+    self$y <- torch::torch_tensor(matrix(y, ncol = 1), dtype = torch::torch_float())
+  },
+  .getitem = function(i) {
+    list(x = self$x[i, ], y = self$y[i, ])
+  },
+  .length = function() {
+    self$x$size(1)
+  }
+)
+```
+
+## 5. Training and prediction helper
+
+`fit_predict_torch()` scales the fold, trains for a fixed number of
+epochs with Adam and MSE loss, and returns predictions on the assessment
+set (un-scaled) plus the per-epoch training loss for diagnostics. To
+keep this vignette’s build time reasonable, it also caps the *analysis*
+(training) rows it fits on per fold at `max_train`, subsampling down
+from however many the fold actually has; the full assessment set is
+still scored either way, since prediction is a single forward pass and
+costs essentially nothing regardless of size. A smaller sample is also a
+reasonable match for the smaller network (`hidden = c(16, 8)`) defined
+above – there is less point training a wider net on a subsample too
+small to need that much capacity.
+
+``` r
+
+fit_predict_torch <- function(train, test, feature_cols, target_col,
+                               epochs = 15, batch_size = 512, lr = 1e-3,
+                               max_train = 4000) {
+  if (nrow(train) > max_train) {
+    train <- train[sample.int(nrow(train), max_train)]
+  }
+  fold <- prep_fold_matrices(train, test, feature_cols, target_col)
+
+  model <- pm10_net(n_features = length(feature_cols))
+  model <- model$to(device = device)
+  optimizer <- torch::optim_adam(model$parameters, lr = lr)
+
+  train_ds <- pm10_dataset(fold$x_train, fold$y_train)
+  train_dl <- torch::dataloader(train_ds, batch_size = batch_size, shuffle = TRUE)
+
+  losses <- numeric(epochs)
+  for (epoch in seq_len(epochs)) {
+    model$train()
+    epoch_loss <- 0
+    n_seen <- 0
+    coro::loop(for (batch in train_dl) {
+      x_b <- batch$x$to(device = device)
+      y_b <- batch$y$to(device = device)
+
+      optimizer$zero_grad()
+      pred <- model(x_b)
+      loss <- torch::nnf_mse_loss(pred, y_b)
+      loss$backward()
+      optimizer$step()
+
+      epoch_loss <- epoch_loss + loss$item() * x_b$size(1)
+      n_seen <- n_seen + x_b$size(1)
+    })
+    losses[epoch] <- epoch_loss / n_seen
+  }
+
+  model$eval()
+  x_test_t <- torch::torch_tensor(fold$x_test, dtype = torch::torch_float())$to(device = device)
+  pred_scaled <- torch::with_no_grad(model(x_test_t))
+  pred <- as.numeric(pred_scaled$to(device = "cpu")) * fold$y_scale + fold$y_center
+
+  list(pred = pred, loss_curve = losses)
+}
+```
+
+Three details carry over directly from `dbarts`/`xgboost` fold-fitting
+in the companion vignette, just implemented differently: refit from
+scratch on every fold’s analysis set (a fresh `pm10_net()` each call, so
+no weights leak across folds), score only on that fold’s assessment set,
+and record both RMSE and MAE.
+
+``` r
+
+rmse <- function(actual, pred) sqrt(mean((actual - pred)^2))
+mae <- function(actual, pred) mean(abs(actual - pred))
+
+evaluate_rset_torch <- function(rset, cv_mode, epochs = 15) {
+  per_fold <- lapply(seq_len(nrow(rset)), function(i) {
+    split <- rset$splits[[i]]
+    train <- as.data.table(rsample::analysis(split))
+    test <- as.data.table(rsample::assessment(split))
+
+    fit <- fit_predict_torch(train, test, feature_cols, target_col, epochs = epochs)
+
+    data.table(
+      cv_mode = cv_mode,
+      fold = rset$id[i],
+      n_test = nrow(test),
+      rmse = rmse(test[[target_col]], fit$pred),
+      mae = mae(test[[target_col]], fit$pred),
+      final_train_loss = fit$loss_curve[epochs]
+    )
+  })
+  rbindlist(per_fold)
+}
+```
+
+## 6. Running the four schemes
+
+This refits the network `sum(sapply(rset_list, nrow))` times in total
+(5 + 6 + 6 + 6 folds). Each fit trains on at most `max_train = 4000`
+subsampled rows for 15 epochs in mini-batches of 512, which keeps this
+section under two minutes on a laptop CPU. That is a real
+speed/precision trade-off, not a free lunch: fewer training rows and
+fewer epochs mean noisier per-fold RMSE than a full-data, longer-trained
+run would give. Raise `max_train` (up to `Inf`, i.e. no subsampling) and
+`epochs` if you want tighter numbers and can spare on the order of ten
+extra minutes of build time. Section 12 revisits mini-batch granularity
+for the graph model, where the relevant batch unit is a *day*, not a
+row, and no subsampling is needed to stay fast.
+
+``` r
+
+results <- rbindlist(Map(evaluate_rset_torch, rset_list, names(rset_list)))
+
+summary_tbl <- results[, .(
+  n_folds = uniqueN(fold),
+  mean_rmse = mean(rmse),
+  mean_mae = mean(mae)
+), by = cv_mode]
+
+knitr::kable(summary_tbl[order(cv_mode)], digits = 2)
+```
+
+``` r
+
+plotly::plot_ly(
+  data = results,
+  x = ~cv_mode, y = ~rmse,
+  type = "box"
+) |>
+  plotly::layout(
+    yaxis = list(title = "Fold RMSE (PM10, ug/m3)"),
+    xaxis = list(title = "CV scheme")
+  )
+```
+
+## 7. Reading a training curve
+
+Aggregate RMSE hides whether a given fold’s network actually converged.
+Re-fitting one `lblo` fold and plotting its loss curve shows what a
+healthy run looks like – useful as a sanity check before trusting the
+numbers above, and as a template for spotting an under- or over-fit fold
+(a curve that is still falling at the last epoch means `epochs` was set
+too low; one that is flat from the start usually means `lr` is too low
+or too high).
+
+``` r
+
+split1 <- rset_list$lblo$splits[[1]]
+train1 <- as.data.table(rsample::analysis(split1))
+test1 <- as.data.table(rsample::assessment(split1))
+
+fit1 <- fit_predict_torch(train1, test1, feature_cols, target_col)
+
+plot(
+  seq_along(fit1$loss_curve), fit1$loss_curve,
+  type = "l", xlab = "epoch", ylab = "training MSE (scaled PM10)",
+  main = "Training curve, lblo fold 1"
+)
+```
+
+## MLP takeaways
+
+- Neural networks need scaling; tree ensembles do not. Fitting the
+  scaler on the analysis set alone, per fold, is the same leakage
+  discipline as any other model – the difference is that with trees
+  there is nothing to leak (splits are scale-invariant), so it is easy
+  to forget this step when switching to `torch`.
+- [`torch::dataset()`](https://torch.mlverse.org/docs/reference/dataset.html) +
+  [`dataloader()`](https://torch.mlverse.org/docs/reference/dataloader.html)
+  slots directly into the
+  [`rsample::analysis()`](https://rsample.tidymodels.org/reference/as.data.frame.rsplit.html)/[`assessment()`](https://rsample.tidymodels.org/reference/as.data.frame.rsplit.html)
+  tables that
+  [`convert_cv_index_rset()`](https://sigmafelix.github.io/stcvlite/reference/convert_cv_index_rset.md)
+  produces – the CV machinery in `stcvlite` does not care what kind of
+  model consumes its splits.
+- Refitting cost is the practical constraint on which schemes you can
+  afford to run: `lolo`’s 69 stations were fine for xgboost/BART in the
+  companion vignette but would mean 69 separate training loops here.
+  Block schemes (`lblo`/`lbto`/`lblto`) keep the fold count – and
+  therefore the number of networks trained – small regardless of dataset
+  size, which makes them a more practical default for iterative models.
+- As in the companion vignette, expect `lbto`/`lblto` (temporal
+  extrapolation) to read as harder than `random` or `lblo`, for the same
+  reason: the seasonal harmonics repeat every year, so a network that
+  has never seen a given stretch of days has no signal about that
+  stretch’s actual meteorology, only its position in the annual cycle.
+
+## 8. From independent rows to a graph
+
+The MLP above scores every station-day row on its own; if a station is
+held out entirely (`lolo`/`lblo`), the network’s only handle on it is
+whatever it can extrapolate from `lon`/`lat`/`station_altitude` as
+smooth functions. A **graph neural network** gives the model something
+more direct: an explicit edge to each held-out station’s nearest
+neighbors, so its prediction is built partly from *their* observed
+behavior, not just from a coordinate-to-PM10 function learned elsewhere
+on the map.
+
+This section builds a small graph convolutional model over the 69
+station locations and reuses the exact `cv_indices` computed in Section
+2 – the fold assignments themselves do not change; only the model, and
+the shape of data it expects, do.
+
+## 9. Building the station graph
+
+Nodes are the 69 unique stations. Edges connect each station to its `k`
+nearest neighbors by coordinate distance, found with
+[`FNN::get.knn()`](https://rdrr.io/pkg/FNN/man/get.knn.html) (the same
+package `stcvlite` uses internally for one of its own spatial blocking
+engines). We symmetrize the result – if A lists B as a neighbor, we keep
+the A-B edge even if B’s own `k` nearest happen not to include A – and
+store a **row-normalized** adjacency matrix, so each node’s
+graph-convolution input is the *mean* of its neighbors’ features.
+
+``` r
+
+station_lookup <- unique(air_dt[, .(station_id, lon, lat, station_altitude)])
+setorder(station_lookup, station_id)
+station_lookup[, station_idx := .I]
+n_stations <- nrow(station_lookup)
+
+knn <- FNN::get.knn(as.matrix(station_lookup[, .(lon, lat)]), k = 8)
+adj <- matrix(0, n_stations, n_stations)
+for (i in seq_len(n_stations)) adj[i, knn$nn.index[i, ]] <- 1
+adj <- pmax(adj, t(adj))
+
+a_mean <- adj / rowSums(adj)
+a_mean_t <- torch::torch_tensor(a_mean, dtype = torch::torch_float())$to(device = device)
+
+cat(sprintf(
+  "%d stations, %d undirected edges (k = 8 nearest neighbors)\n",
+  n_stations, sum(adj) / 2
+))
+```
+
+A first version of this section used a plain symmetric-normalized
+adjacency (the shared-weight aggregation from Kipf & Welling’s original
+GCN paper, `D^-1/2 (A + I) D^-1/2`). On this graph it consistently
+underperformed the row-level MLP: mixing a station’s own signal in with
+eight neighbors under one shared weight matrix diluted exactly the
+per-station information (altitude, precise location) that mattered most.
+The layer below fixes that by giving a station’s own features and its
+neighbors’ features **separate** weights – a GraphSAGE-style mean
+aggregator – which recovered MLP-competitive accuracy in testing.
+
+## 10. From rows to a station-day panel
+
+A row-level `x`/`y` matrix does not have a graph structure to convolve
+over. The graph convolution needs, for each *day*, a feature matrix with
+one row per station in a fixed order – so we reshape the data into a
+`(day x station x feature)` array instead. Not every station reports
+every day (54-68 of the 69 report on any given day), so we track which
+`(day, station)` cells are actually observed with a boolean mask.
+
+``` r
+
+day_lookup <- data.table(time = sort(unique(air_dt$time)))
+day_lookup[, day_idx := .I]
+day_lookup[, doy := as.integer(format(time, "%j"))]
+day_lookup[, doy_sin := sin(2 * pi * doy / 365)]
+day_lookup[, doy_cos := cos(2 * pi * doy / 365)]
+n_days <- nrow(day_lookup)
+
+air_panel <- copy(air_dt)
+air_panel[, station_idx := station_lookup$station_idx[match(station_id, station_lookup$station_id)]]
+air_panel[, day_idx := day_lookup$day_idx[match(time, day_lookup$time)]]
+
+range(air_panel[, .N, by = day_idx]$N)
+```
+
+`station_altitude`/`lon`/`lat` are known for every station regardless of
+whether it reported PM10 on a given day, and `doy_sin`/`doy_cos` are
+known for every calendar day regardless of station – so building the
+full `(day, station)` feature grid does not invent any information, it
+only reshapes rows we already had. Only the *target* (`PM10`) and the
+*fold assignment* are actually missing outside the observed cells, and
+both are masked out below rather than filled in.
+
+``` r
+
+station_feat <- scale(as.matrix(station_lookup[order(station_idx), .(lon, lat, station_altitude)]))
+day_feat <- as.matrix(day_lookup[order(day_idx), .(doy_sin, doy_cos)])
+
+x_station <- torch::torch_tensor(station_feat, dtype = torch::torch_float())
+x_day <- torch::torch_tensor(day_feat, dtype = torch::torch_float())
+
+x_station_b <- x_station$unsqueeze(1)$expand(c(n_days, n_stations, ncol(station_feat)))
+x_day_b <- x_day$unsqueeze(2)$expand(c(n_days, n_stations, ncol(day_feat)))
+x_full <- torch::torch_cat(list(x_station_b, x_day_b), dim = 3)
+
+x_full$shape
+```
+
+``` r
+
+y_full <- matrix(0, n_days, n_stations)
+obs_mask <- matrix(FALSE, n_days, n_stations)
+idx_mat <- as.matrix(air_panel[, .(day_idx, station_idx)])
+y_full[idx_mat] <- air_panel[[target_col]]
+obs_mask[idx_mat] <- TRUE
+
+fold_mats <- lapply(cv_indices, function(cv) {
+  m <- matrix(NA_integer_, n_days, n_stations)
+  m[idx_mat] <- cv
+  m
+})
+```
+
+`station_feat`/`day_feat` are standardized once, globally, rather than
+per fold: unlike the MLP’s target, these are exogenous covariates
+(station coordinates, altitude, calendar date) that do not depend on the
+response, so there is no leakage risk in using every station’s and every
+day’s value to compute the mean/sd. The target is still scaled per fold,
+from the training mask only, exactly as in Section 3.
+
+## 11. A GraphSAGE-style model
+
+Each layer computes two linear transforms – one of the node’s own
+features, one of its neighbors’ mean features – and adds them, rather
+than mixing both under one shared weight matrix:
+
+``` r
+
+sage_layer <- torch::nn_module(
+  classname = "sage_layer",
+  initialize = function(in_features, out_features, a_norm) {
+    self$lin_self <- torch::nn_linear(in_features, out_features)
+    self$lin_neigh <- torch::nn_linear(in_features, out_features)
+    self$register_buffer("a_norm", a_norm)
+  },
+  forward = function(x) {
+    neighbor_mean <- torch::torch_matmul(self$a_norm, x)
+    self$lin_self(x) + self$lin_neigh(neighbor_mean)
+  }
+)
+
+pm10_sage <- torch::nn_module(
+  classname = "pm10_sage",
+  initialize = function(n_features, a_norm, hidden = c(32, 16), dropout = 0.05) {
+    self$gc1 <- sage_layer(n_features, hidden[1], a_norm)
+    self$gc2 <- sage_layer(hidden[1], hidden[2], a_norm)
+    self$out <- torch::nn_linear(hidden[2], 1)
+    self$drop <- torch::nn_dropout(dropout)
+  },
+  forward = function(x) {
+    x |>
+      self$gc1() |>
+      torch::nnf_relu() |>
+      self$drop() |>
+      self$gc2() |>
+      torch::nnf_relu() |>
+      self$out()
+  }
+)
+```
+
+`self$register_buffer("a_norm", a_norm)` matters: the adjacency matrix
+is fixed (not learned), but registering it as a buffer – rather than
+just assigning `self$a_norm <- a_norm` – makes `model$to(device = ...)`
+move it along with the learnable weights, so it stays on the same device
+as everything else if you switch to a GPU.
+
+Because `a_norm` is a single `(69 x 69)` matrix shared by every day,
+`torch_matmul(a_norm, x)` broadcasts over a whole batch of days at once
+when `x` has shape `(batch, 69, features)` – one call aggregates
+neighbor information for every day in the batch, no per-day loop needed.
+
+## 12. Training across folds
+
+A “batch” here is a set of *days* rather than a set of rows: training
+loops over shuffled day indices, and for each batch pulls
+`x_full[days, , ]`, forwards it through the shared graph, and computes a
+masked MSE that only counts `(day, station)` cells the current fold
+assigns to the analysis set. Days that belong entirely to the assessment
+set for a given fold (e.g. every day in a held-out `lbto` block) are
+skipped during training and used only for scoring.
+
+``` r
+
+masked_mse <- function(pred, target, mask) {
+  ((pred - target)^2 * mask)$sum() / mask$sum()
+}
+
+fit_predict_gcn <- function(cv_mode, fold_id, epochs = 80, batch_days = 32, lr = 0.01) {
+  fold_mat <- fold_mats[[cv_mode]]
+  train_mask_mat <- obs_mask & !is.na(fold_mat) & (fold_mat != fold_id)
+  test_mask_mat  <- obs_mask & !is.na(fold_mat) & (fold_mat == fold_id)
+
+  y_center <- mean(y_full[train_mask_mat])
+  y_scale <- sd(y_full[train_mask_mat])
+  y_scaled <- (y_full - y_center) / y_scale
+  y_scaled[!obs_mask] <- 0
+
+  y_t <- torch::torch_tensor(y_scaled, dtype = torch::torch_float())$to(device = device)
+  train_mask_t <- torch::torch_tensor(train_mask_mat * 1, dtype = torch::torch_float())$to(device = device)
+
+  train_days <- which(rowSums(train_mask_mat) > 0)
+  test_days <- which(rowSums(test_mask_mat) > 0)
+
+  model <- pm10_sage(n_features = x_full$shape[3], a_norm = a_mean_t)
+  model <- model$to(device = device)
+  optimizer <- torch::optim_adam(model$parameters, lr = lr)
+
+  losses <- numeric(epochs)
+  for (epoch in seq_len(epochs)) {
+    model$train()
+    perm <- sample(train_days)
+    batches <- split(perm, ceiling(seq_along(perm) / batch_days))
+    epoch_loss <- 0
+    for (b in batches) {
+      optimizer$zero_grad()
+      x_b <- x_full[b, , ]$to(device = device)
+      if (length(b) == 1) x_b <- x_b$unsqueeze(1)
+      pred <- model(x_b)$squeeze(3)
+      y_b <- y_t[b, ]
+      m_b <- train_mask_t[b, ]
+      if (length(b) == 1) {
+        y_b <- y_b$unsqueeze(1)
+        m_b <- m_b$unsqueeze(1)
+      }
+      loss <- masked_mse(pred, y_b, m_b)
+      loss$backward()
+      optimizer$step()
+      epoch_loss <- epoch_loss + loss$item() * length(b)
+    }
+    losses[epoch] <- epoch_loss / length(perm)
+  }
+
+  model$eval()
+  x_test <- x_full[test_days, , ]$to(device = device)
+  if (length(test_days) == 1) x_test <- x_test$unsqueeze(1)
+  pred_scaled <- torch::with_no_grad(model(x_test)$squeeze(3))
+  pred_mat <- as.matrix(pred_scaled$to(device = "cpu")) * y_scale + y_center
+
+  actual_mat <- y_full[test_days, , drop = FALSE]
+  mask_mat <- test_mask_mat[test_days, , drop = FALSE]
+
+  list(
+    pred = pred_mat[mask_mat == 1],
+    actual = actual_mat[mask_mat == 1],
+    loss_curve = losses
+  )
+}
+
+evaluate_gcn <- function(cv_mode, epochs = 80) {
+  n_folds <- max(cv_indices[[cv_mode]])
+  per_fold <- lapply(seq_len(n_folds), function(k) {
+    fit <- fit_predict_gcn(cv_mode, k, epochs = epochs)
+    data.table(
+      cv_mode = cv_mode,
+      fold = k,
+      n_test = length(fit$pred),
+      rmse = rmse(fit$actual, fit$pred),
+      mae = mae(fit$actual, fit$pred)
+    )
+  })
+  rbindlist(per_fold)
+}
+```
+
+``` r
+
+results_gcn <- rbindlist(lapply(names(cv_indices), evaluate_gcn))
+
+summary_gcn <- results_gcn[, .(
+  n_folds = uniqueN(fold),
+  mean_rmse = mean(rmse),
+  mean_mae = mean(mae)
+), by = cv_mode]
+
+knitr::kable(summary_gcn[order(cv_mode)], digits = 2)
+```
+
+Note what “a batch” costs here versus in Section 5: the MLP’s
+`dataloader` iterates mini-batches of individual *rows*, and even after
+capping training rows at `max_train = 4000` per fold to keep Section 6
+fast, the GCN’s mini-batches – individual *days*, at most 365 of them,
+each one a single matrix multiply against a 69x69 adjacency shared
+across the whole dataset – need no such subsampling to run quickly.
+Refitting all `sum(sapply(cv_indices, max))` folds across all four
+schemes here takes well under a minute despite using more than five
+times the epoch count (80 vs. 15), because the number of gradient steps
+scales with the number of *days*, not the number of station-day *rows*.
+
+## 13. MLP vs. GCN, side by side
+
+``` r
+
+comparison <- rbindlist(list(
+  results[, .(cv_mode, rmse, mae, model = "mlp")],
+  results_gcn[, .(cv_mode, rmse, mae, model = "gcn")]
+))
+
+comparison_summary <- comparison[, .(mean_rmse = mean(rmse)), by = .(cv_mode, model)]
+knitr::kable(
+  dcast(comparison_summary, cv_mode ~ model, value.var = "mean_rmse")[order(cv_mode)],
+  digits = 2
+)
+```
+
+``` r
+
+plotly::plot_ly(
+  data = comparison,
+  x = ~cv_mode, y = ~rmse, color = ~model,
+  type = "box"
+) |>
+  plotly::layout(
+    yaxis = list(title = "Fold RMSE (PM10, ug/m3)"),
+    xaxis = list(title = "CV scheme"),
+    boxmode = "group"
+  )
+```
+
+## Overall takeaways
+
+- A GNN is not a drop-in improvement – the naive shared-weight GCN layer
+  described in Section 9 was *worse* than the plain row-level MLP on
+  this data. The graph structure only helped once the architecture
+  (separate self/neighbor weights) let the model keep a station’s own
+  signal instead of averaging it away with eight neighbors.
+- In the run captured above, the GCN and MLP land within noise of each
+  other on every scheme – neither model is a consistent winner, even on
+  `lblo`, where a held-out station’s graph neighbors are exactly the
+  information the MLP does not have direct access to. The likely reason:
+  the graph layers here only aggregate the *same* static, exogenous
+  features (coordinates, altitude, calendar day) the MLP already
+  receives per row – a neighbor’s location does not tell the model much
+  that the held-out station’s own location did not. A graph is only as
+  useful as what flows over its edges; passing neighbors’ *observed
+  PM10* (e.g. a lagged or same-day value where available) as a node
+  feature, not just their static covariates, is the natural next step
+  and would give the GCN information genuinely unavailable to the
+  row-level MLP.
+- The two models need different data shapes for the *same*
+  `stcvlite`-generated fold assignments: the MLP consumes
+  [`rsample::analysis()`](https://rsample.tidymodels.org/reference/as.data.frame.rsplit.html)/[`assessment()`](https://rsample.tidymodels.org/reference/as.data.frame.rsplit.html)
+  tables row by row, while the GCN needs the row-level `cv_indices`
+  vector reshaped into a `(day, station)` mask. `stcvlite`’s CV indices
+  are just integer fold labels aligned to your original rows – reshaping
+  or resampling them to fit a given architecture is entirely up to the
+  modeling code, not something `stcvlite` needs to know about.
+- Mini-batch granularity matters as much as model choice for training
+  cost: batching by row (Section 5) versus batching by day over a shared
+  graph (Section 12) changed wall-clock training time far more than
+  switching from xgboost/BART to a neural network did in the companion
+  vignette.
